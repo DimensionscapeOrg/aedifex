@@ -1,0 +1,20 @@
+{
+	"config": {
+		"meta": {
+			"title": "DefaultApplication",
+			"version": "1.0.0",
+			"company": "",
+			"author": []
+		},
+		"app": {
+			"path": "bin",
+			"main": "Main",
+			"file": "DefaultApplication"
+		},
+		"source": {
+			"path": "src"
+		},
+		"haxelib": [],
+		"haxedef": []
+	}
+}
