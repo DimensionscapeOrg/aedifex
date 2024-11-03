@@ -2,7 +2,7 @@
 	"name": "Aedifex",
 	"url": "https://github.com/dimensionscape-llc/aedifex",
 	"license": "GPL",
-	"tags": [ "build, "tools"],
+	"tags": ["build", "tools"],
 	"description": "Cross platform build tools",
 	"version": "0.0.1",
 	"releasenote": "Initial Haxelib Release",
