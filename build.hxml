@@ -1,0 +1,7 @@
+-cp src 
+-cpp bin 
+-main Aedifex 
+--resource template/config.json@config 
+--resource template/haxe/Main.hx@main 
+--resource template/haxe/ProgramMain.hx@ProgramMain 
+-D windows="1"

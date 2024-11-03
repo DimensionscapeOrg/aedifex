@@ -1,19 +1,19 @@
 package;
 
-import cpp.Lib;
 import haxe.Json;
 import haxe.Resource;
 import haxe.format.JsonPrinter;
 import haxe.io.Path;
-import sys.FileStat;
 import sys.FileSystem;
 import sys.io.File;
+import util.SystemUtil;
 /**
  * ...
  * @author Christopher Speciale
  */
 class Aedifex
 {
+
 	private static var _args:Array<String>;
 	private static var _command:Array<String> = [];
 	private static var _config:Dynamic;
@@ -24,7 +24,7 @@ class Aedifex
 
 	static var SPACE:String = " ";
 	static var QUOTES:String = '"';
-	static var BACKSLASH:String = "\\";
+	static var BACKSLASH:String = #if windows "\\" #else "/" #end;
 	static var DOT:String = ".";
 	static var EXE:String = "exe";
 	static var JSON:String = "json";
@@ -42,6 +42,7 @@ class Aedifex
 	static var OBJ:String = "obj";
 	static var SRC:String = "src";
 	static var WINDOWS:String = "windows";
+	static var LINUX:String = "linux";
 	static var DEFINE:String = "-D";
 	
 
@@ -49,7 +50,8 @@ class Aedifex
 	public static var target(get, null):String;
 	
 	static function main()
-	{
+	{		
+
 		_configTemplate = Json.parse(Resource.getString(CONFIG));
 		_mainTemplate = Resource.getString(MAIN);
 		
@@ -83,7 +85,11 @@ class Aedifex
 
 	private static function intro():Void
 	{
-		Sys.command('echo \u001b[31;1m');
+		#if windows
+		Sys.command("echo \u001b[31;1m");
+		#else
+		Sys.command("echo '\u001b[31;1m'");
+		#end
 
 		Sys.print("
  .d8b.  d88888b d8888b. d888888b d88888b d88888b db    db 
@@ -93,17 +99,27 @@ d8' `8b 88'     88  `8D   `88'   88'     88'     `8b  d8'
 88   88 88.     88  .8D   .88.   88      88.     .8P  Y8. 
 YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP 
 ");
+		#if windows
+		Sys.command("echo \u001b[0m");
+		#else
+		Sys.command("echo '\u001b[0m'");
+		#end
 		
-		Sys.command('echo \u001b[0m');
-
 		Sys.print("All rights reserved. 2020 - 2023(c) Dimensionscape LLC \n");
-
-		Sys.command('echo \u001b[37;1m');
-
+		
+		#if windows
+		Sys.command("echo \u001b[37;1m");
+		#else
+		Sys.command("echo '\u001b[37;1m'");
+		#end		
+		
 		Sys.print("Command-Line Tool (v0.0.1)");
-
+		
+		#if windows
 		Sys.command('echo \u001b[0m');
-
+		#else
+		Sys.command("echo '\u001b[0m'");
+		#end
 	}
 
 	private static function _push(arg:String, dash:Bool = false):Void
@@ -146,8 +162,6 @@ YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP
 	}
 	
 	private static function _createProjectAt(path:String):Void{
-		//trace(path);
-		//trace(_mainTemplate);
 		
 		FileSystem.createDirectory(path);
 		FileSystem.createDirectory(path + BACKSLASH + SRC);
@@ -170,7 +184,12 @@ YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP
 		Sys.println("Building Project");
 		_push(HAXE);
 		_push(PATH, true);
-
+		
+		if (_args.length < 2){
+			Sys.println("Not enough arguments");
+			return false;
+		}
+		
 		switch (_args[1].toLowerCase())
 		{
 			case "cpp":
@@ -223,13 +242,7 @@ YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP
 		_push(_target, true);
 
 		
-		_push(Path.normalize(QUOTES + _targetPath + BACKSLASH + OBJ + QUOTES));
-		
-		//_createApplicationEntry();
-		//_push(MAIN, true);
-		//_push(_config.config.app.main);
-		
-		
+		_push(Path.normalize(QUOTES + _targetPath + BACKSLASH + OBJ + QUOTES));		
 		
 		if (Sys.systemName().toLowerCase() == WINDOWS && _target == CPP){
 			_push(DEFINE + SPACE + WINDOWS);
@@ -238,12 +251,13 @@ YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP
 		_push(PATH, true);
 		_push(Path.normalize(QUOTES + path + BACKSLASH + _config.config.source.path + QUOTES));
 
-		
-		_push("--macro haxe.macro.Context.getModule('"+ _config.config.app.main + "')");
+		var macroArgument:String = "haxe.macro.Context.getModule('" + _config.config.app.main + "')";
+		_push('--macro "$macroArgument"');
 		
 		
 		
 		var defines:Array<Dynamic> = _config.config.haxedef;
+		
 		
 		for (define in defines){
 			switch(Type.typeof(define)){
@@ -251,23 +265,35 @@ YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP
 					_push('-D $define');
 				case TObject:
 					if (Reflect.hasField(define, "value") && Reflect.hasField(define, "key")){
-					_push('- D ${define.key}=${define.value}');
+					_push('-D ${define.key}=${define.value}');
 					}
 				default:
 			}			
 		}
 		
+		
 		if (_args.length >= 4){
 			if (_args[3].toLowerCase() == "debug"){
-				defines.push("-D HXCPP_DEBUG");
+				_push("-D HXCPP_DEBUG");
 			}
 		}
 		
+		_push('-D ${SystemUtil.platform}');
+		
 		_runCommand();
-
+		
+		#if windows
 		var objBinFile:String = Path.join([_targetPath + BACKSLASH + OBJ, "ProgramMain" + DOT + EXE]);
+		#else
+		var objBinFile:String = Path.join([_targetPath + BACKSLASH + OBJ, "ProgramMain"]);
+		#end
+		
 		var binDirectory:String = _targetPath + BACKSLASH + BIN;
+		#if windows
 		var binFile:String = Path.join([binDirectory, _config.config.app.file + DOT + EXE]);
+		#else
+		var binFile:String = Path.join([binDirectory, _config.config.app.file]);
+		#end
 		
 		if (!FileSystem.exists(binDirectory)){
 			FileSystem.createDirectory(binDirectory);
@@ -285,7 +311,8 @@ YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP
 	}
 	
 	private static function _createApplicationEntry():Void{
-		var tempProgramTemplate:String = Resource.getString("programMain");
+		var tempProgramTemplate:String = Resource.getString("ProgramMain");
+
 		var regex:EReg = new EReg("::.*::","g");
 		var programTemplate:String = regex.replace(tempProgramTemplate, _config.config.app.main);
 		var haxePath:String = _targetPath + BACKSLASH + HAXE;
@@ -407,7 +434,11 @@ YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP
 	private static function get_target():String{
 		
 		if (_target == CPP){
+			#if windows
 			return WINDOWS;
+			#else
+			return LINUX;
+			#end
 		}
 	
 		
@@ -419,9 +450,16 @@ YP   YP Y88888P Y8888D' Y888888P YP      Y88888P YP    YP
 
 		//if (System.platformName == "Windows")
 		//{
-		//#if windows
+		#if windows
 		path = Sys.getEnv("TEMP");
-		//#end
+		#else
+		path = Sys.getEnv("TMPDIR");
+			if (path == null)
+			{
+				path = "/tmp";
+			}
+		#end
+		trace("PATH", path);
 		//}
 	/*	else
 		{
