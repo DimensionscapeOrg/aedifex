@@ -70,7 +70,8 @@ class Aedifex
 				case "create":
 					_create();
 				default:
-					Sys.println("Argument not recognized");
+					intro();
+					_displayInfo();
 			}
 		} else {
 			intro();
