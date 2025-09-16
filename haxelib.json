@@ -4,8 +4,8 @@
 	"license": "GPL",
 	"tags": ["build", "tools"],
 	"description": "Cross platform build tools",
-	"version": "0.0.2",
-	"releasenote": "Include run script",
+	"version": "0.1.0",
+	"releasenote": "Major refactor, themes",
 	"contributors": [		
 		"Dimensionscape"
 	],
