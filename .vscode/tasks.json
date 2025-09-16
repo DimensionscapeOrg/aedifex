@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build CPP",
+            "type": "shell",
+            "command": "haxe",
+            "args": [
+                "${workspaceFolder}/build.hxml", 
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always"
+            }
+        }
+    ]
+}
