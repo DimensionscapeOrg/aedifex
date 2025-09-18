@@ -1,5 +1,7 @@
 package;
 
+import aedifex.theme.Themes;
+import aedifex.plugin.PluginManager;
 import aedifex.util.Intro;
 import aedifex.config.Loader;
 import aedifex.config.AedifexConfig;
@@ -15,10 +17,12 @@ import sys.FileSystem;
 
 class Aedifex {
 	public static inline final version:String = "0.1.0";
+	public static final plugins:PluginManager = new PluginManager();
+
 	public static function main():Void {
 		var args:Array<String> = Sys.args();
 
-		var theme:String = "cyber";
+		var theme:String = Themes.cyber;
 		for (i in 0...args.length)
 			if (StringTools.startsWith(args[i], "--theme=")) {
 				theme = args[i].substr("--theme=".length);
@@ -26,7 +30,7 @@ class Aedifex {
 				break;
 			}
 
-		Intro.show(version, false, theme);
+		Intro.show(version, theme);
 
 		if (args.length == 0) {
 			return help();
