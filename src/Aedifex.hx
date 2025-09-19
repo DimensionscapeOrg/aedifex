@@ -1,5 +1,6 @@
 package;
 
+import aedifex.util.ANSI;
 import aedifex.theme.Themes;
 import aedifex.plugin.PluginManager;
 import aedifex.util.Intro;
@@ -17,20 +18,34 @@ import sys.FileSystem;
 
 class Aedifex {
 	public static inline final version:String = "0.1.0";
-	public static final plugins:PluginManager = new PluginManager();
+	public static var plugins:PluginManager;
+
+	private static var currentTheme:String;
 
 	public static function main():Void {
 		var args:Array<String> = Sys.args();
 
-		var theme:String = Themes.cyber;
-		for (i in 0...args.length)
+		#if cpp
+		ANSI.forceVT(true);
+		ConsoleMode.enable();
+		#end
+
+		currentTheme = "cyber";
+
+		plugins = new PluginManager();
+		
+		for (i in 0...args.length) {
 			if (StringTools.startsWith(args[i], "--theme=")) {
-				theme = args[i].substr("--theme=".length);
+				var themeName:String = args[i].substr("--theme=".length);
+				if(Themes.themeRegistry.exists(themeName)){
+					currentTheme = themeName;
+				}
 				args.splice(i, 1);
 				break;
 			}
+		}
 
-		Intro.show(version, theme);
+		Intro.show(version, currentTheme);
 
 		if (args.length == 0) {
 			return help();
@@ -67,7 +82,7 @@ class Aedifex {
 Aedifex: A Tiny cross-target build system daemon
 
 Usage:
-  aedifex create <path>
+  aedifex create <path> --plugin
   aedifex build <target> <projectPath> [--debug] [--define KEY[=VAL]]... [--lib LIB]...
   aedifex run   <target> <projectPath>
   aedifex test  <target> <projectPath> [--debug]
@@ -81,32 +96,62 @@ Targets: cpp | hl | neko | java | jvm
 			throw "create requires <path>";
 		}
 
-		var projectPath:String = Path.removeTrailingSlashes(args[1]);
-		FileSystem.createDirectory(projectPath);
-		FileSystem.createDirectory(Path.join([projectPath, "src"]));
-		FileSystem.createDirectory(Path.join([projectPath, "bin"]));
+		var isPlugin:Bool = false;
+		for (i in 2...args.length) {
+			var a:String = args[i];
+			if (a == "--plugin" || a == "-p") {
+				isPlugin = true;
+			}
+		}
 
-		var mainT:String = Resource.getString("MainTemplate");
+		var projectPath:String = Path.removeTrailingSlashes(args[1]);
+		var norm:String = Path.normalize(projectPath);
+		var li:Int = norm.lastIndexOf("/") + 1;
+		var name:String = norm.substr(li);
+
+		ensureDir(projectPath);
+		ensureDir(Path.join([projectPath, "src"]));
+		ensureDir(Path.join([projectPath, "bin"]));
+
+		if (isPlugin) {
+			var pluginDir:String = Path.join([projectPath, "src", "aedifex", "plugin"]);
+			ensureDir(Path.join([projectPath, "src", "aedifex"]));
+			ensureDir(pluginDir);
+
+			var wireSrc:String = Resource.getString("PluginWire");
+			if (wireSrc == null) {
+				throw "Missing resource: PluginWire";
+			}
+
+			File.saveContent(Path.join([pluginDir, "PluginWire.hx"]), wireSrc);
+
+			Sys.println("New plugin project created at: " + projectPath);
+		}
+
+		var mainT:String = Resource.getString("main-template");
 		if (mainT == null) {
-			throw "Missing resource: MainTemplate";
+			throw "Missing resource: main-template";
 		}
 
 		File.saveContent(Path.join([projectPath, "src", "Main.hx"]), mainT);
 
-		var cfgT:String = Resource.getString("AedifexConfigTemplate");
+		var cfgT:String = Resource.getString("config-template");
 		if (cfgT == null) {
-			throw "Missing resource: AedifexConfigTemplate";
+			throw "Missing resource: config-template";
 		}
 
-		var norm:String = Path.normalize(projectPath);
-		var li:Int = norm.lastIndexOf("/") + 1;
-		var name:String = norm.substr(li);
 		var cfg:AedifexConfig = cast Json.parse(cfgT);
 		cfg.config.meta.title = name;
 		cfg.config.app.file = name;
 
 		File.saveContent(Path.join([projectPath, "config.json"]), JsonPrinter.print(cfg, null, "\t"));
 		Sys.println("New project created at: " + projectPath);
+	}
+
+	private static inline function ensureDir(p:String):Void {
+		if (!FileSystem.exists(p)) {
+			FileSystem.createDirectory(p);
+		}
 	}
 
 	private static function doBuild(args:Array<String>):Void {
@@ -161,5 +206,34 @@ Targets: cpp | hl | neko | java | jvm
 	private static function doTest(args:Array<String>):Void {
 		doBuild(args);
 		doRun(args);
+	}
+}
+
+@:cppInclude("Windows.h")
+class ConsoleMode {
+	public static function enable():Void {
+		#if cpp
+		untyped __cpp__('
+      #ifdef _WIN32
+      #ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+      #define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+      #endif
+
+      SetConsoleOutputCP(65001);
+      SetConsoleCP(65001);
+
+      DWORD m=0; HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE);
+      if (h!=INVALID_HANDLE_VALUE && GetConsoleMode(h,&m)) {
+        m |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(h,m);
+      }
+      h=GetStdHandle(STD_ERROR_HANDLE);
+      if (h!=INVALID_HANDLE_VALUE && GetConsoleMode(h,&m)) {
+        m |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(h,m);
+      }
+      #endif
+    ');
+		#end
 	}
 }

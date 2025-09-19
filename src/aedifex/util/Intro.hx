@@ -5,11 +5,11 @@ import aedifex.theme.Theme;
 import aedifex.theme.Themes;
 
 class Intro {
-	public static function show(version:String, ?themeJson:String = Themes.red):Void {
+	public static function show(version:String, ?theme:String = "defaultTheme"):Void {
 		var bannerRes = Resource.getString("AedifexBanner");
 		var banner = (bannerRes != null) ? bannerRes : defaultBanner();
 
-		var theme:Theme = Theme.resolveTheme(themeJson);
+		var theme:Theme = Theme.resolveTheme(theme);
 		theme.renderBanner(banner, version);
 	}
 

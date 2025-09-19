@@ -1,7 +1,9 @@
 -cp src 
 -cpp bin
 -main Aedifex 
---resource template/config.json@config 
---resource template/haxe/Main.hx@main 
---resource template/haxe/ProgramMain.hx@ProgramMain 
+--resource template/config.json@config-template 
+--resource template/haxe/Main.hx@main-template 
+--resource template/haxe/ProgramMain.hx@ProgramMain  
+--resource template/plugin/PluginWire.hx@PluginWire
 -D windows="1"
+-D HXCPP_DEBUGGER

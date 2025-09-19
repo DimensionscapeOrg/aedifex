@@ -1,5 +1,6 @@
 package aedifex.plugin;
 
+import haxe.ds.StringMap;
 import haxe.Timer;
 import haxe.io.Input;
 import haxe.Serializer;
@@ -12,6 +13,8 @@ import sys.thread.Thread;
 import sys.thread.Mutex;
 
 class Plugin extends Process {
+	public inline static final WIRE_PROTOCOL_VERSION:Int = 1;
+
 	public var name(default, null):String;
 	public var pluginVersion(default, null):String;
 	public var capabilities(default, null):Array<String> = [];
@@ -31,6 +34,14 @@ class Plugin extends Process {
 	public function new(path:String) {
 		super(path);
 		name = Path.withoutDirectory(Path.withoutExtension(path));
+
+		_errReader = Thread.create(() -> {
+			try {
+				while (_running) {
+					Sys.println("[plugin:" + name + "] " + this.stderr.readLine());
+				}
+			} catch (e:Dynamic) {}
+		});
 
 		_reader = Thread.create(() -> {
 			try {
@@ -72,14 +83,6 @@ class Plugin extends Process {
 						continue;
 					}
 					pushEnvelope({ok: ok, result: res, error: err});
-				}
-			} catch (e:Dynamic) {}
-		});
-
-		_errReader = Thread.create(() -> {
-			try {
-				while (_running) {
-					Sys.println("[plugin:" + name + "] " + this.stderr.readLine());
 				}
 			} catch (e:Dynamic) {}
 		});
@@ -142,10 +145,9 @@ class Plugin extends Process {
 				result: null
 			});
 		}
-
 		var env:PluginResponse = _responses.pop(true);
 
-		var elapsedMs:Int = Std.int((haxe.Timer.stamp() - start) * 1000);
+		var elapsedMs:Int = Std.int((Timer.stamp() - start) * 1000);
 		env.method = method;
 		env.ticket = ticket;
 		env.durationMs = elapsedMs;
@@ -167,6 +169,8 @@ class Plugin extends Process {
 		var resp:PluginResponse = this.call("plugin.init", [{hostVersion: version, protocol: 1}], 5.0);
 		if (!resp.ok) {
 			return false;
+		} else {
+			Sys.println('[$name] plugin loaded');
 		}
 
 		var info:Dynamic = resp.result;
@@ -175,11 +179,63 @@ class Plugin extends Process {
 			return true;
 		}
 
+		if (info.reflection != null) {
+			handleReflect(info.reflection);
+		}
 		pluginVersion = (Reflect.hasField(info, "pluginVersion") ? info.pluginVersion : null);
 		capabilities = (Reflect.hasField(info, "capabilities") ? info.capabilities : []);
 
 		_ready = (Reflect.hasField(info, "ok") ? info.ok : true);
 		return _ready;
+	}
+
+	private function handleReflect(reflection:Dynamic) {
+		var reflectFields:Array<String> = Reflect.fields(reflection);
+		for (field in reflectFields) {
+			var split:Array<String> = field.split("::");
+			var className:String = split[0];
+			var fieldName:String = split[1];
+
+			var valueSet:Dynamic = Reflect.field(reflection, field);
+
+			var classT:Class<Any> = Type.resolveClass(className);
+			var classField:Any = Reflect.field(classT, fieldName);
+			var valueT:Class<Any> = Type.getClass(classField);
+			var sValueT:String = Std.string(valueT);
+
+			switch (sValueT) {
+				case "String":
+					handleReflectionString(classT, fieldName, valueSet);
+				case "haxe.ds.StringMap":
+					handleReflectionStringMap(classT, fieldName, valueSet);
+				default:
+			}
+		}
+	}
+
+	private inline function handleReflectionStringMap(classT:Class<Any>, field:String, value:Any) {
+        var sMap:StringMap<Dynamic> = Reflect.field(classT, field);            
+        
+		if (Std.isOfType(value, String)) {
+			var split:Array<String> = (value:String).split("=>");
+			sMap.set(split[0], split[1]);
+		} else if(Std.isOfType(value, Array)) {
+            var valueArr:Array<String> = value;
+            for(v in valueArr){
+                var split:Array<String> = v.split("=>");
+                sMap.set(split[0], split[1]);
+            }
+        }
+	}
+
+	private inline function handleReflectionString(classT:Class<Any>, field:String, value:String) {
+		if (value.indexOf("::") > -1) {
+			var split:Array<String> = value.split("::");
+			var className:String = split[0];
+			var fieldName:String = split[1];
+			value = Reflect.field(Type.resolveClass(className), fieldName);
+		}
+		Reflect.setField(classT, field, value);
 	}
 
 	override public function close():Void {
@@ -240,7 +296,7 @@ class Plugin extends Process {
 	private static inline function safeReadInt32(inp:Input):Int {
 		try {
 			return inp.readInt32();
-		} catch (_:Dynamic) {
+		} catch (e:Dynamic) {
 			return -1;
 		}
 	}

@@ -1,10 +1,5 @@
 package;
 
-class Main  
-{
-	public function new() 
-	{
-		
-	}
-	
+class Main {
+	public function new() {}
 }

@@ -19,7 +19,8 @@ abstract Theme(ThemeData) from ThemeData to ThemeData {
 		return new Theme(cast o);
 	}
 
-	public static function resolveTheme(data:String):Theme{
+	public static function resolveTheme(theme:String):Theme{
+        var data:String = Themes.themeRegistry.get(theme);
         return fromJson(data);
     }
 		
@@ -30,7 +31,7 @@ abstract Theme(ThemeData) from ThemeData to ThemeData {
 				var head:RGB = this.head, sub = this.sub, meta = this.meta;
 				Sys.print(ANSI.rgb(head.r, head.g, head.b) + banner + ANSI.reset);
 				Sys.print(ANSI.rgb(sub.r, sub.g, sub.b) + 'Command-Line Tool ' + version + ANSI.reset + "\n");
-				Sys.println(ANSI.rgb(meta.r, meta.g, meta.b) + '(c) 2020–2025 Dimensionscape LLC. All rights reserved.' + ANSI.reset);
+				Sys.println(ANSI.rgb(meta.r, meta.g, meta.b) + '(c)2020-2025 Dimensionscape LLC. All rights reserved.' + ANSI.reset);
 
 			case "sweep":
 				printSweep(banner, this.sweep.s, this.sweep.e);
