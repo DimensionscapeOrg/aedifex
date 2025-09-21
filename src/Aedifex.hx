@@ -21,6 +21,8 @@ class Aedifex {
 	public static var plugins:PluginManager;
 
 	private static var currentTheme:String;
+	private static inline final USER_CFG_DIR = ".aedifex";
+	private static inline final USER_CFG_FILE = "config.json";
 
 	public static function main():Void {
 		var args:Array<String> = Sys.args();
@@ -32,18 +34,20 @@ class Aedifex {
 
 		currentTheme = "cyber";
 
-		plugins = new PluginManager();
-		
 		for (i in 0...args.length) {
 			if (StringTools.startsWith(args[i], "--theme=")) {
 				var themeName:String = args[i].substr("--theme=".length);
-				if(Themes.themeRegistry.exists(themeName)){
+				if (Themes.themeRegistry.exists(themeName)) {
 					currentTheme = themeName;
 				}
+
 				args.splice(i, 1);
 				break;
 			}
 		}
+
+		var pluginsRoot:String = resolvePluginsPath(args);
+		plugins = new PluginManager(pluginsRoot);
 
 		Intro.show(version, currentTheme);
 
@@ -62,6 +66,8 @@ class Aedifex {
 					doTest(args);
 				case "create":
 					doCreate(args);
+				case "plugins":
+					doPlugins(args, pluginsRoot); // ← new
 				case "help", "-h", "--help":
 					help();
 				default:
@@ -73,6 +79,128 @@ class Aedifex {
 		}
 	}
 
+	private static function doPlugins(args:Array<String>, currentRoot:String):Void {
+		// Usage:
+		//   aedifex plugins list
+		//   aedifex plugins path
+		//   aedifex plugins path --set <dir>
+
+		if (args.length < 2) {
+			Sys.println("plugins commands: list | path [--set <dir>]");
+			return;
+		}
+
+		switch (args[1]) {
+			case "list":
+				var names:Array<String> = plugins.listNames();
+				if (names.length == 0) {
+					Sys.println("(no plugins found in: " + currentRoot + ")");
+				} else {
+					Sys.println("Plugins in " + currentRoot + ":");
+					for (n in names) {
+						Sys.println("  - " + n);
+					}
+				}
+
+			case "path":
+				var setTo:Null<String> = null;
+				var i:Int = 2;
+				while (i < args.length) {
+					var a:String = args[i];
+					if (a == "--set") {
+						if (i + 1 >= args.length){
+							throw "--set requires <dir>";
+						}
+							
+						setTo = Path.normalize(args[i + 1]);
+						i++;
+					} else
+						throw 'Unknown flag: $a';
+					i++;
+				}
+				if (setTo == null) {
+					Sys.println(currentRoot);
+				} else {
+					if (!sys.FileSystem.exists(setTo)){
+						sys.FileSystem.createDirectory(setTo);
+					}						
+					saveUserPluginsPath(setTo);
+					Sys.println("Plugins path set to: " + setTo);
+				}
+
+			default:
+				Sys.println("plugins commands: list | path [--set <dir>]");
+		}
+	}
+
+	private static function programDir():String {
+		return Path.directory(Sys.programPath());
+	}
+
+	private static function userConfigPath():String {
+		var home:String = Sys.getEnv(#if windows "USERPROFILE" #else "HOME" #end);
+		if (home == null || home == "") {
+			return null;
+		}
+
+		return Path.join([home, USER_CFG_DIR, USER_CFG_FILE]);
+	}
+
+	private static function loadUserPluginsPath():Null<String> {
+		var path:String = userConfigPath();
+		if (path == null || !sys.FileSystem.exists(path)) {
+			return null;
+		}
+		try {
+			var obj:Dynamic = Json.parse(sys.io.File.getContent(path));
+			return (obj != null && Reflect.hasField(obj, "pluginsPath")) ? obj.pluginsPath : null;
+		} catch (_:Dynamic) {
+			return null;
+		}
+	}
+
+	private static function saveUserPluginsPath(dir:String):Void {
+		var cfgPath:String = userConfigPath();
+		if (cfgPath == null) {
+			return;
+		}
+		var cfgDir:String = Path.directory(cfgPath);
+		if (!sys.FileSystem.exists(cfgDir)) {
+			sys.FileSystem.createDirectory(cfgDir);
+		}
+		var obj:Dynamic = {};
+
+		if (sys.FileSystem.exists(cfgPath)) {
+			try {
+				obj = haxe.Json.parse(sys.io.File.getContent(cfgPath));
+			} catch (_:Dynamic)
+				obj = {};
+		}
+		Reflect.setField(obj, "pluginsPath", dir);
+		File.saveContent(cfgPath, haxe.format.JsonPrinter.print(obj, null, "\t"));
+	}
+
+	private static function resolvePluginsPath(argv:Array<String>):String {
+		for (a in argv)
+			if (StringTools.startsWith(a, "--plugins=")) {
+				var p:String = a.substr("--plugins=".length);
+				if (p != "") {
+					return Path.normalize(p);
+				}
+			}
+		var env:String = Sys.getEnv("AEDIFEX_PLUGINS");
+		if (env != null && env != "") {
+			return Path.normalize(env);
+		}
+
+		var user:String = loadUserPluginsPath();
+		if (user != null && user != "") {
+			return Path.normalize(user);
+		}
+
+		return Path.join([programDir(), "plugins"]);
+	}
+
 	private static function help(?msg:String):Void {
 		if (msg != null) {
 			Sys.println(msg);
@@ -82,10 +210,16 @@ class Aedifex {
 Aedifex: A Tiny cross-target build system daemon
 
 Usage:
-  aedifex create <path> --plugin
-  aedifex build <target> <projectPath> [--debug] [--define KEY[=VAL]]... [--lib LIB]...
-  aedifex run   <target> <projectPath>
-  aedifex test  <target> <projectPath> [--debug]
+  aedifex create <path> [--plugin]
+  aedifex build <target> <projectPath> [--debug] [--define KEY[=VAL]]... [--lib LIB]... [--plugins=<dir>]
+  aedifex run   <target> <projectPath> [--plugins=<dir>]
+  aedifex test  <target> <projectPath> [--debug] [--plugins=<dir>]
+  aedifex plugins list
+  aedifex plugins path [--set <dir>]
+
+Global flags:
+  --theme=<name>     Select banner theme
+  --plugins=<dir>    Override plugin root for this invocation
 
 Targets: cpp | hl | neko | java | jvm
 ");
