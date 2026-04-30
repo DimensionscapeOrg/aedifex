@@ -1,6 +1,5 @@
 
 *.zip
-docs/
 dist/
 .aedifex/
 bin/include/

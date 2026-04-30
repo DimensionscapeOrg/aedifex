@@ -18,5 +18,8 @@ class Aedifex {
 		.mainClass("aedifex.cli.Main")
 		.task("rebuild-native", "haxe", ["build.hxml"], null, "Rebuild the native Aedifex executable.")
 		.task("rebuild-runner", "haxe", ["run.hxml"], null, "Rebuild the Neko haxelib runner.")
+		.task("docs-validate", "haxe", ["ci/docs-validate.hxml"], null, "Validate markdown links and docs structure.")
+		.task("docs-api", "haxe", ["ci/docs-api.hxml"], null, "Generate curated Dox API documentation.")
+		.task("docs", "haxe", ["ci/docs.hxml"], null, "Validate docs and build the docs artifact.")
 		.done();
 }

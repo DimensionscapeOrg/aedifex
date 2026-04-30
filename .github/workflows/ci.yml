@@ -5,6 +5,36 @@ on:
   pull_request:
 
 jobs:
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: 4.3.7
+
+      - name: Install Dox
+        run: haxelib install dox
+
+      - name: Build Aedifex runner
+        run: haxe run.hxml
+
+      - name: Register local Aedifex checkout
+        run: haxelib dev aedifex .
+
+      - name: Build docs artifact
+        run: haxelib run aedifex task docs .
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aedifex-docs
+          path: dist/docs
+
   core-targets:
     name: ${{ matrix.os }} - ${{ matrix.target }}${{ matrix.qualifierLabel }}
     runs-on: ${{ matrix.os }}
