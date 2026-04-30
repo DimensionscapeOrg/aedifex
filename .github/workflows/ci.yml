@@ -87,42 +87,42 @@ jobs:
             qualifier: "-html5"
             qualifierLabel: " - html5"
             runTarget: false
-          - os: macos-latest
+          - os: macos-13
             target: cpp
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
-          - os: macos-latest
+          - os: macos-13
             target: hl
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
             needsHashLink: true
-          - os: macos-latest
+          - os: macos-13
             target: neko
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
             needsNeko: true
-          - os: macos-latest
+          - os: macos-13
             target: jvm
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
             needsJava: true
-          - os: macos-latest
+          - os: macos-13
             target: php
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
             needsPhp: true
-          - os: macos-latest
+          - os: macos-13
             target: js
             qualifier: "-node"
             qualifierLabel: " - node"
             runTarget: true
             needsNode: true
-          - os: macos-latest
+          - os: macos-13
             target: js
             qualifier: "-html5"
             qualifierLabel: " - html5"
@@ -159,27 +159,33 @@ jobs:
         with:
           php-version: "8.3"
 
-      - name: Install HashLink and Neko on Ubuntu
-        if: runner.os == 'Linux' && (matrix.needsHashLink || matrix.needsNeko)
+      - name: Install Neko on Ubuntu
+        if: runner.os == 'Linux' && matrix.needsNeko
         run: |
           sudo apt-get update
-          if [ "${{ matrix.needsHashLink }}" = "true" ]; then
-            sudo apt-get install -y hashlink
-          fi
-          if [ "${{ matrix.needsNeko }}" = "true" ]; then
-            sudo apt-get install -y neko
-          fi
+          sudo apt-get install -y neko
 
-      - name: Install HashLink and Neko on macOS
-        if: runner.os == 'macOS' && (matrix.needsHashLink || matrix.needsNeko)
+      - name: Install HashLink on Ubuntu
+        if: runner.os == 'Linux' && matrix.needsHashLink
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpng-dev libturbojpeg-dev libvorbis-dev libopenal-dev libsdl2-dev libglu1-mesa-dev libmbedtls-dev libuv1-dev libsqlite3-dev
+          git clone --depth 1 https://github.com/HaxeFoundation/hashlink.git /tmp/hashlink
+          make -C /tmp/hashlink
+          sudo make -C /tmp/hashlink install
+          sudo ldconfig
+
+      - name: Install Neko on macOS
+        if: runner.os == 'macOS' && matrix.needsNeko
         run: |
           brew update
-          if [ "${{ matrix.needsHashLink }}" = "true" ]; then
-            brew install hashlink
-          fi
-          if [ "${{ matrix.needsNeko }}" = "true" ]; then
-            brew install neko
-          fi
+          brew install neko
+
+      - name: Install HashLink on macOS
+        if: runner.os == 'macOS' && matrix.needsHashLink
+        run: |
+          brew update
+          brew install hashlink
 
       - name: Install HashLink and Neko on Windows
         if: runner.os == 'Windows' && (matrix.needsHashLink || matrix.needsNeko)
