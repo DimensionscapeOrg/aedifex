@@ -1,9 +1,14 @@
 {
-  "name": "aedifex-vscode",
-  "displayName": "Aedifex",
-  "description": "VS Code support for Aedifex projects.",
-  "version": "1.0.0-rc.2",
+  "name": "vs-aedifex",
+  "displayName": "Aedifex for VS Code",
+  "description": "Official Visual Studio Code support for Aedifex projects.",
+  "version": "1.0.3",
   "publisher": "dimensionscape",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimensionscapeorg/aedifex.git"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },

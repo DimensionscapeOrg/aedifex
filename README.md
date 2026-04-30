@@ -1,8 +1,8 @@
 # Aedifex
 
-Aedifex is a Haxe build tool that uses a typed `Aedifex.hx` root instead of a top-level authored `hxml`.
+Aedifex is a Haxe build tool built around a typed `Aedifex.hx` project root instead of a hand-authored top-level `hxml`.
 
-It keeps the public surface small:
+The public surface stays intentionally small:
 
 - target-first build commands
 - environment setup as a first-class contract
@@ -10,7 +10,7 @@ It keeps the public surface small:
 - task automation
 - machine-readable tooling for editor integration
 
-## Quickstart
+## Quick Start
 
 Install:
 
@@ -26,13 +26,13 @@ haxelib dev aedifex /path/to/aedifex
 haxe run.hxml
 ```
 
-Create an app:
+Create an application:
 
 ```powershell
 aedifex create path/to/MyApp
 ```
 
-Set up a target and build:
+Prepare a target and build:
 
 ```powershell
 aedifex setup cpp
@@ -40,7 +40,7 @@ aedifex build cpp path/to/MyApp -debug
 aedifex run cpp path/to/MyApp -debug
 ```
 
-## Minimal App Example
+## Minimal Application Example
 
 ```haxe
 package;
@@ -97,7 +97,7 @@ class Aedifex {
 }
 ```
 
-## Command Cheat Sheet
+## Command Reference
 
 ```text
 aedifex create <path> [-plugin] [-library]
@@ -180,7 +180,7 @@ aedifex run neko examples/hello-world -debug
 aedifex build js examples/hello-world -node -debug
 ```
 
-## Docs
+## Documentation
 
 Guides:
 
@@ -201,9 +201,11 @@ Reference:
 - [Installation and deployment](docs/installation-and-deployment.md)
 - [VS Code extension reference](docs/vscode-extension.md)
 
-Generated API docs:
+API reference:
 
-- [dist/docs/api/index.html](dist/docs/api/index.html)
+- Build the curated API reference locally with `aedifex task docs-api .`
+- Build the full documentation artifact with `aedifex task docs .`
+- CI uploads the generated documentation artifact for each successful docs job
 
 Build docs locally:
 

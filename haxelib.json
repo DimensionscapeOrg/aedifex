@@ -13,8 +13,8 @@
 	"contributors": [
 		"Dimensionscape"
 	],
-	"releasenote": "Second release candidate of the Aedifex.hx-based chassis with target-based commands, library roots, task support, haxelib metadata sync, typed define catalogs, and VS Code extension scaffolding.",
-	"version": "1.0.0-rc.2",
-	"url": "https://github.com/dimensionscape-llc/aedifex",
+	"releasenote": "Third release candidate with target setup readiness, runner-first packaging, curated documentation, stronger API hinting, and a refined VS Code workflow.",
+	"version": "1.0.0-rc.3",
+	"url": "https://github.com/dimensionscapeorg/aedifex",
 	"dependencies": {}
 }

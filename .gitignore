@@ -2,6 +2,9 @@
 *.zip
 dist/
 .aedifex/
+tools/vscode-extension/*.vsix
+tools/vscode-extension/icon.png
+examples/hello-world/.vscode/
 bin/include/
 bin/obj/
 bin/src/

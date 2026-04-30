@@ -1,0 +1,5 @@
+This extension is distributed under the GNU General Public License, version 3 or later.
+
+See the repository root LICENSE file for the full license text:
+
+https://github.com/dimensionscapeorg/aedifex/blob/main/LICENSE

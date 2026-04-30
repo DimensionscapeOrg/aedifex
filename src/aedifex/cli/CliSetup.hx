@@ -43,8 +43,8 @@ class CliSetup {
 		Sys.println("  " + targetDirectory);
 		Sys.println("");
 		Sys.println("You can now run:");
-		Sys.println("  aedifex profiles --json");
-		Sys.println("  aedifex build windows . --profile debug");
+		Sys.println("  aedifex profiles -json");
+		Sys.println("  aedifex build cpp . -debug");
 	}
 
 	public static function remove(targetDirectory:String):Void {

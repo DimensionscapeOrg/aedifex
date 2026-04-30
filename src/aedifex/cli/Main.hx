@@ -52,6 +52,7 @@ Daily use:
 
 Tool:
   aedifex rebuild
+  aedifex extension [rebuild|package]
   aedifex setup [status|remove]
   aedifex setup <target> [-android|-ios|-html5|-node] [-check] [-json]
 
@@ -85,6 +86,7 @@ Project:
 
 Tool:
   aedifex rebuild
+  aedifex extension [rebuild|package]
   aedifex setup [status|remove]
   aedifex setup <target> [-android|-ios|-html5|-node] [-check] [-json]
 
@@ -225,6 +227,8 @@ Most people should use:
 					doSetup(args);
 				case "rebuild":
 					doToolRebuild(args);
+				case "extension":
+					doExtension(args);
 				case "clean":
 					ensurePlugins(resolvePluginsPath(args));
 					doClean(args);
@@ -484,6 +488,10 @@ Most people should use:
 		Sys.println("Runner rebuild complete.");
 
 		Sys.println("Rebuild complete for " + root);
+	}
+
+	private static function doExtension(args:Array<String>):Void {
+		ExtensionTools.run(args.length > 1 ? args.slice(1) : []);
 	}
 
 	private static function doClean(args:Array<String>):Void {

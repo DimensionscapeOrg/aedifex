@@ -69,9 +69,9 @@ class ReleaseTools {
 		try {
 			runIn(tempRoot, "haxelib", ["newrepo"]);
 			runIn(tempRoot, "haxelib", ["install", normalizedZip]);
-			runIn(tempRoot, "haxelib", ["run", "aedifex", "profiles", "--json"]);
+			runIn(tempRoot, "haxelib", ["run", "aedifex", "profiles", "-json"]);
 			runIn(tempRoot, "haxelib", ["run", "aedifex", "create", sampleRoot]);
-			runIn(tempRoot, "haxelib", ["run", "aedifex", "build", "neko", sampleRoot, "--profile", "debug"]);
+			runIn(tempRoot, "haxelib", ["run", "aedifex", "build", "neko", sampleRoot, "-debug"]);
 		} catch (error:Dynamic) {
 			failure = error;
 		}
@@ -86,6 +86,8 @@ class ReleaseTools {
 		appendIfPresent(root, results, "LICENSE");
 		appendIfPresent(root, results, "README.md");
 		appendIfPresent(root, results, "build.hxml");
+		appendIfPresent(root, results, "ci");
+		appendIfPresent(root, results, "docs");
 		appendIfPresent(root, results, "haxelib.json");
 		appendIfPresent(root, results, "run.hxml");
 		appendIfPresent(root, results, "run.n");

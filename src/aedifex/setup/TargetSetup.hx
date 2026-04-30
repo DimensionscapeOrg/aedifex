@@ -109,6 +109,8 @@ class TargetSetup {
 			case "windows":
 				if (hasCommand("cl")) {
 					rememberDetected("MSVC", status);
+				} else if (hasHxcppMsvcSetup()) {
+					rememberDetected("MSVC", status);
 				} else {
 					rememberMissing("c++ compiler", status);
 					rememberStep("Install Visual Studio Build Tools with the Desktop development with C++ workload.", status);
@@ -248,6 +250,58 @@ class TargetSetup {
 		} catch (_:Dynamic) {
 			try process.close() catch (_:Dynamic) {}
 			return false;
+		}
+	}
+
+	private static function hasHxcppMsvcSetup():Bool {
+		var hxcppRoot = resolveHaxelibRoot("hxcpp");
+		if (hxcppRoot == null) {
+			return false;
+		}
+
+		var scriptName = SystemUtil.hostArchitecture() == "x64" ? "msvc64-setup.bat" : "msvc-setup.bat";
+		var scriptPath = Path.join([hxcppRoot, "toolchain", scriptName]);
+		if (!isFile(scriptPath)) {
+			return false;
+		}
+
+		var process = try {
+			new Process("cmd.exe", ["/C", scriptPath]);
+		} catch (_:Dynamic) {
+			return false;
+		}
+
+		try {
+			var stdout = process.stdout.readAll().toString();
+			process.stderr.readAll();
+			var exitCode = process.exitCode();
+			process.close();
+			return exitCode == 0 && stdout.indexOf("HXCPP_VARS") != -1;
+		} catch (_:Dynamic) {
+			try process.close() catch (_:Dynamic) {}
+			return false;
+		}
+	}
+
+	private static function resolveHaxelibRoot(name:String):String {
+		var process = try {
+			new Process("haxelib", ["libpath", name]);
+		} catch (_:Dynamic) {
+			return null;
+		}
+
+		try {
+			var stdout = StringTools.trim(process.stdout.readAll().toString());
+			process.stderr.readAll();
+			var exitCode = process.exitCode();
+			process.close();
+			if (exitCode != 0 || stdout.length == 0) {
+				return null;
+			}
+			return Path.normalize(stdout.split("\n")[0]);
+		} catch (_:Dynamic) {
+			try process.close() catch (_:Dynamic) {}
+			return null;
 		}
 	}
 

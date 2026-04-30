@@ -1,6 +1,6 @@
-# Aedifex VS Code Extension
+# Aedifex for VS Code
 
-This extension is a thin client over the Aedifex CLI.
+This extension is the official Visual Studio Code companion for Aedifex.
 
 Current features:
 - auto-activates when a workspace contains `Aedifex.hx`

@@ -16,7 +16,6 @@ let extensionContext;
 let displayProvider;
 let displayProviderRegistration;
 let taskProviderDisposable;
-const runTerminals = new Map();
 
 async function activate(context) {
   extensionContext = context;
@@ -72,7 +71,7 @@ async function refreshStatusBar() {
     const displayPayload = await syncDisplayProvider(folder);
     await applyGeneratedHaxeConfiguration(folder, displayPayload);
     const explain = await getExplain(folder);
-    if (!hasRunnableTargets(explain)) {
+    if (!hasSelectableTargets(explain)) {
       targetItem.text = `Aedifex: ${explain.kind || 'project'}`;
       targetItem.tooltip = `Active Aedifex root kind for ${folder.name}`;
       targetItem.show();
@@ -109,7 +108,7 @@ async function selectTarget() {
   }
 
   const payload = await getTargets(folder);
-  if (!hasRunnableTargets(payload)) {
+  if (!hasSelectableTargets(payload)) {
     vscode.window.showInformationMessage(nonRunnableSelectionMessage(payload));
     return;
   }
@@ -177,7 +176,7 @@ async function runLifecycleCommand(command, forceClean = false) {
   }
 
   const explain = await getExplain(folder);
-  if (!hasRunnableTargets(explain)) {
+  if (!hasSelectableTargets(explain)) {
     if (explain.kind === 'tool' && command === 'build') {
       await rebuildToolRoot(folder);
       return;
@@ -218,7 +217,7 @@ async function startDebugging() {
   }
 
   const explain = await getExplain(folder);
-  if (!hasRunnableTargets(explain)) {
+  if (!hasSelectableTargets(explain)) {
     vscode.window.showInformationMessage(nonRunnableMessage(explain, 'debug', await safeTaskPayload(folder)));
     return;
   }
@@ -274,9 +273,7 @@ class AedifexDebugConfigurationProvider {
 
     const resolved = toDebugConfiguration(workspaceFolder, target, profile, plan.launcher, profile === 'debug');
     if (!resolved) {
-      if (profile !== 'debug') {
-        await launchWithoutDebugging(workspaceFolder, target, profile, plan.launcher);
-      }
+      await launchWithoutDebugging(workspaceFolder, target, profile, plan.launcher);
       return null;
     }
     return resolved;
@@ -320,7 +317,7 @@ function toDebugConfiguration(folder, target, profile, launcher, allowWarnings =
   if (launcher.kind === 'terminal') {
     if (String(launcher.command || '').toLowerCase() !== 'node') {
       if (allowWarnings) {
-        vscode.window.showWarningMessage(`Aedifex target '${target}' runs in a terminal for profile '${profile}', but it does not currently expose a VS Code debugger.`);
+        vscode.window.showWarningMessage(nonDebuggableTargetMessage(target, profile));
       }
       return null;
     }
@@ -334,9 +331,13 @@ function toDebugConfiguration(folder, target, profile, launcher, allowWarnings =
   }
 
   if (allowWarnings) {
-    vscode.window.showWarningMessage(`Aedifex target '${target}' does not currently expose a VS Code debugger for profile '${profile}'.`);
+    vscode.window.showWarningMessage(nonDebuggableTargetMessage(target, profile));
   }
   return null;
+}
+
+function nonDebuggableTargetMessage(target, profile) {
+  return `Aedifex target '${target}' can run for profile '${profile}', but VS Code debugging is not implemented for this target yet. Aedifex will build and run it without a debugger.`;
 }
 
 async function launchWithoutDebugging(folder, target, profile, launcher) {
@@ -350,9 +351,7 @@ async function launchWithoutDebugging(folder, target, profile, launcher) {
   }
 
   if (launcher.kind === 'terminal') {
-    const terminal = getOrCreateRunTerminal(folder, target, launcher.cwd || folder.uri.fsPath);
-    terminal.show(true);
-    terminal.sendText(buildTerminalCommand(launcher), true);
+    await vscode.tasks.executeTask(createLauncherTask(folder, target, launcher));
     return;
   }
 
@@ -367,6 +366,28 @@ async function launchWithoutDebugging(folder, target, profile, launcher) {
 function buildTerminalCommand(launcher) {
   const parts = [launcher.command].concat(Array.isArray(launcher.args) ? launcher.args : []);
   return parts.map(quoteArg).join(' ');
+}
+
+function createLauncherTask(folder, target, launcher) {
+  const definition = {
+    type: 'aedifex-launcher',
+    target,
+    command: launcher.command || target
+  };
+  const args = Array.isArray(launcher.args) ? launcher.args.slice() : [];
+  const execution = new vscode.ProcessExecution(launcher.command, args, {
+    cwd: launcher.cwd || folder.uri.fsPath
+  });
+  const task = new vscode.Task(definition, folder, 'Aedifex', 'aedifex', execution);
+  task.presentationOptions = {
+    reveal: vscode.TaskRevealKind.Always,
+    clear: false,
+    focus: false,
+    echo: true,
+    panel: vscode.TaskPanelKind.Shared
+  };
+  task.isBackground = false;
+  return task;
 }
 
 function resolveLauncherCwd(launcher) {
@@ -427,7 +448,7 @@ async function getTasks(folder) {
 async function getSelectedTarget(folder, fallback, promptIfMissing = false) {
   const key = targetStateKey(folder);
   const payload = await getTargets(folder);
-  const available = getRunnableTargets(payload);
+  const available = getSelectableTargets(payload);
   const availableNames = new Set(available.map((item) => item.name));
   let target = extensionContext.workspaceState.get(key);
   if (target && !availableNames.has(target)) {
@@ -489,8 +510,13 @@ function getRunnableTargets(payload) {
     .filter((item) => item && item.buildSupported && !item.hidden);
 }
 
+function getSelectableTargets(payload) {
+  return (payload && Array.isArray(payload.targets) ? payload.targets : [])
+    .filter((item) => item && item.declared && !item.hidden);
+}
+
 async function promptForTarget(folder, payload) {
-  const available = getRunnableTargets(payload);
+  const available = getSelectableTargets(payload);
   if (available.length === 0) {
     return null;
   }
@@ -659,11 +685,12 @@ function resolveCliCandidates(folder, finalArgs) {
   }
 
   const candidates = [];
-  if (isAedifexToolCheckout(folder)) {
+  const checkoutRoot = findOwningAedifexToolCheckout(folder);
+  if (checkoutRoot) {
     candidates.push({
       command: 'neko',
-      args: [path.join(folder.uri.fsPath, 'run.n')].concat(finalArgs),
-      display: `neko ${quoteArg(path.join(folder.uri.fsPath, 'run.n'))} ${finalArgs.map(quoteArg).join(' ')}`
+      args: [path.join(checkoutRoot, 'run.n')].concat(finalArgs),
+      display: `neko ${quoteArg(path.join(checkoutRoot, 'run.n'))} ${finalArgs.map(quoteArg).join(' ')}`
     });
   }
 
@@ -771,6 +798,45 @@ function isAedifexToolCheckout(folder) {
     && fs.existsSync(path.join(root, 'haxelib.json'));
 }
 
+function findOwningAedifexToolCheckout(folder) {
+  const start = folder && folder.uri ? folder.uri.fsPath : null;
+  if (!start) {
+    return null;
+  }
+
+  let current = start;
+  while (current && current.length > 0) {
+    const candidate = workspaceLike(current);
+    if (isAedifexToolCheckout(candidate) && isAedifexHaxelibRoot(current)) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (!parent || parent === current) {
+      break;
+    }
+    current = parent;
+  }
+  return null;
+}
+
+function isAedifexHaxelibRoot(rootPath) {
+  try {
+    const packagePath = path.join(rootPath, 'haxelib.json');
+    if (!fs.existsSync(packagePath)) {
+      return false;
+    }
+    const payload = parseJsonLike(fs.readFileSync(packagePath, 'utf8'));
+    return payload && payload.name === 'aedifex';
+  } catch (_) {
+    return false;
+  }
+}
+
+function hasSelectableTargets(payload) {
+  const targets = payload && Array.isArray(payload.targets) ? payload.targets : [];
+  return targets.some((item) => item && item.declared && !item.hidden);
+}
+
 function hasRunnableTargets(payload) {
   const targets = payload && Array.isArray(payload.targets) ? payload.targets : [];
   return targets.some((item) => item && item.buildSupported && !item.hidden);
@@ -798,6 +864,13 @@ function parseJsonResponse(stdout, stderr) {
   }
 
   throw new Error(text.length > 0 ? text : (errText.length > 0 ? errText : 'Aedifex returned non-JSON output.'));
+}
+
+function parseJsonLike(raw) {
+  const withoutBlockComments = String(raw || '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const withoutLineComments = withoutBlockComments.replace(/^\s*\/\/.*$/gm, '');
+  const withoutTrailingCommas = withoutLineComments.replace(/,\s*([}\]])/g, '$1');
+  return JSON.parse(withoutTrailingCommas);
 }
 
 async function runHandled(label, callback) {
@@ -843,14 +916,13 @@ async function ensureLaunchConfiguration(folder, explain, target, profile) {
   try {
     if (fs.existsSync(launchPath)) {
       const raw = fs.readFileSync(launchPath, 'utf8');
-      const parsed = JSON.parse(raw);
+      const parsed = parseJsonLike(raw);
       if (parsed && typeof parsed === 'object') {
         launchData = parsed;
       }
     }
   } catch (error) {
-    outputChannel.appendLine(`[launch] Skipped launch.json sync for ${folder.uri.fsPath}: ${String(error)}`);
-    return;
+    outputChannel.appendLine(`[launch] Falling back to a fresh launch.json for ${folder.uri.fsPath}: ${String(error)}`);
   }
 
   if (!Array.isArray(launchData.configurations)) {
@@ -892,14 +964,13 @@ async function ensureTasksConfiguration(folder, target, profile) {
   try {
     if (fs.existsSync(tasksPath)) {
       const raw = fs.readFileSync(tasksPath, 'utf8');
-      const parsed = JSON.parse(raw);
+      const parsed = parseJsonLike(raw);
       if (parsed && typeof parsed === 'object') {
         tasksData = parsed;
       }
     }
   } catch (error) {
-    outputChannel.appendLine(`[tasks] Skipped tasks.json sync for ${folder.uri.fsPath}: ${String(error)}`);
-    return;
+    outputChannel.appendLine(`[tasks] Falling back to a fresh tasks.json for ${folder.uri.fsPath}: ${String(error)}`);
   }
 
   if (!Array.isArray(tasksData.tasks)) {
@@ -942,7 +1013,7 @@ function buildTargetDescription(target) {
 }
 
 function buildLifecycleArgs(command, target, projectPath, profile, cleanBuild = false) {
-  const args = [command, target, projectPath, '-profile', profile, '-ignore'];
+  const args = [command, target, projectPath, '-profile', profile];
   if (command === 'build' && cleanBuild) {
     args.push('-clean');
   }
@@ -1065,20 +1136,6 @@ function nonRunnableSelectionMessage(payload) {
     return `This Aedifex ${kind} root is valid, but it does not expose runnable targets. Use tasks or metadata workflows instead.`;
   }
   return 'This Aedifex root does not currently declare runnable targets.';
-}
-
-function getOrCreateRunTerminal(folder, target, cwd) {
-  const key = `${folder.uri.fsPath}:${target}`;
-  const existing = runTerminals.get(key);
-  if (existing && existing.exitStatus === undefined) {
-    return existing;
-  }
-  const terminal = vscode.window.createTerminal({
-    name: `Aedifex: ${target}`,
-    cwd
-  });
-  runTerminals.set(key, terminal);
-  return terminal;
 }
 
 async function registerDisplayProvider(context) {
