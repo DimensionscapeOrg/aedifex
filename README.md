@@ -90,7 +90,7 @@ aedifex create path/to/MyApp
 Create a library/framework root:
 
 ```powershell
-aedifex create path/to/MyLib --library
+aedifex create path/to/MyLib -library
 ```
 
 Generated files:
@@ -128,11 +128,9 @@ Core targets:
 - `jvm`
 - `php`
 
-Platform/runtime qualifiers:
+Qualifiers:
 
-- `-windows`
-- `-mac`
-- `-linux`
+- host desktop is implicit
 - `-android`
 - `-ios`
 - `-html5`
@@ -156,9 +154,9 @@ Profiles:
 Inspect a project:
 
 ```powershell
-aedifex explain . --json
-aedifex targets . --json
-aedifex profiles --json
+aedifex explain . -json
+aedifex targets . -json
+aedifex profiles -json
 ```
 
 Build and run an app:
@@ -179,7 +177,7 @@ aedifex build js . -html5 -final
 Manage library tasks and package metadata:
 
 ```powershell
-aedifex tasks . --json
+aedifex tasks . -json
 aedifex task interp-tests .
 aedifex haxelib sync .
 aedifex haxelib check .
@@ -194,20 +192,53 @@ Library and framework roots do not need a build step just to publish package met
 Package a haxelib release:
 
 ```powershell
-aedifex release package . --validate
+aedifex release package . -validate
 ```
+
+## Setup
+
+Use `setup` to make a target environment ready on the current machine.
+
+```powershell
+aedifex setup cpp
+aedifex setup hl
+aedifex setup neko
+aedifex setup jvm
+aedifex setup php
+aedifex setup js
+aedifex setup js -node
+```
+
+Helpful modes:
+
+```powershell
+aedifex setup cpp -check
+aedifex setup js -node -json
+```
+
+When a target is not ready:
+
+- interactive `build`, `run`, and `test` will ask whether to run setup
+- `-ignore` skips the question and fails cleanly instead
 
 ## Full CLI
 
 ```text
-aedifex create <path> [--plugin] [--library]
-aedifex build <target> <projectPath> [-windows|-mac|-linux|-android|-ios|-html5|-node] [-x64|-x86|-arm64|-armv7] [-debug|-release|-final] [--define KEY[=VAL]]... [--lib LIB]... [--plugins=<dir>]
-aedifex clean <target> <projectPath> [-windows|-mac|-linux|-android|-ios|-html5|-node] [-x64|-x86|-arm64|-armv7] [-debug|-release|-final] [--define KEY[=VAL]]... [--lib LIB]... [--plugins=<dir>]
-aedifex run <target> <projectPath> [-windows|-mac|-linux|-android|-ios|-html5|-node] [-x64|-x86|-arm64|-armv7] [-debug|-release|-final] [--plugins=<dir>]
-aedifex test <target> <projectPath> [-windows|-mac|-linux|-android|-ios|-html5|-node] [-x64|-x86|-arm64|-armv7] [-debug|-release|-final] [--plugins=<dir>]
+aedifex create <path> [-plugin] [-library]
+aedifex build <target> <projectPath> [-clean] [-android|-ios|-html5|-node] [-x64|-x86|-arm64|-armv7] [-debug|-release|-final] [-ignore] [-define KEY[=VAL]]... [-lib LIB]... [-plugins <dir>]
+aedifex clean <target> <projectPath> [-android|-ios|-html5|-node] [-x64|-x86|-arm64|-armv7] [-debug|-release|-final]
+aedifex run <target> <projectPath> [-android|-ios|-html5|-node] [-x64|-x86|-arm64|-armv7] [-debug|-release|-final] [-ignore] [-plugins <dir>]
+aedifex test <target> <projectPath> [-android|-ios|-html5|-node] [-x64|-x86|-arm64|-armv7] [-debug|-release|-final] [-ignore] [-plugins <dir>]
 aedifex rebuild
 aedifex setup [status|remove]
+aedifex setup <target> [-android|-ios|-html5|-node] [-check] [-json]
 ```
+
+Global convenience flags:
+
+- `-theme aurora`
+- `-theme` to choose interactively
+- `-plugins path/to/plugins`
 
 Use `aedifex help all` for the complete command reference, including introspection, packaging, and plugin-management commands.
 

@@ -263,7 +263,7 @@ class AedifexDebugConfigurationProvider {
     const target = debugConfiguration.target || await getSelectedTarget(workspaceFolder, null, true);
     const profile = debugConfiguration.profile || await getSelectedProfile(workspaceFolder, null, true);
 
-    const plan = await execJson(workspaceFolder, ['launch-plan', target, workspaceFolder.uri.fsPath, '--profile', profile]);
+    const plan = await execJson(workspaceFolder, ['launch-plan', target, workspaceFolder.uri.fsPath, '-profile', profile]);
 
     if (!plan || !plan.launcher) {
       vscode.window.showErrorMessage('Aedifex did not return a launch plan.');
@@ -624,7 +624,7 @@ function hasAedifexProject(folder) {
 }
 
 async function execJson(folder, args) {
-  const result = await runCli(folder, args.concat('--json'), { expectJson: true, reveal: false });
+  const result = await runCli(folder, args.concat('-json'), { expectJson: true, reveal: false });
   return parseJsonResponse(result.stdout, result.stderr);
 }
 
@@ -639,13 +639,13 @@ function buildCliArgs(args) {
   const finalArgs = [];
   const theme = configuration.get('theme');
   const pluginsPath = configuration.get('pluginsPath');
-  const jsonMode = Array.isArray(args) && args.includes('--json');
+  const jsonMode = Array.isArray(args) && (args.includes('-json') || args.includes('--json'));
 
   if (theme && !jsonMode) {
-    finalArgs.push(`--theme=${theme}`);
+    finalArgs.push(`-theme=${theme}`);
   }
   if (pluginsPath) {
-    finalArgs.push(`--plugins=${pluginsPath}`);
+    finalArgs.push(`-plugins=${pluginsPath}`);
   }
 
   return finalArgs.concat(args);
@@ -942,7 +942,7 @@ function buildTargetDescription(target) {
 }
 
 function buildLifecycleArgs(command, target, projectPath, profile, cleanBuild = false) {
-  const args = [command, target, projectPath, '--profile', profile];
+  const args = [command, target, projectPath, '-profile', profile, '-ignore'];
   if (command === 'build' && cleanBuild) {
     args.push('-clean');
   }
@@ -1008,7 +1008,7 @@ function createCliTask(folder, args) {
 
 function extractProfileFromArgs(args) {
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--profile' && i + 1 < args.length) {
+    if ((args[i] === '-profile' || args[i] === '--profile') && i + 1 < args.length) {
       return args[i + 1];
     }
   }

@@ -71,12 +71,12 @@
         "aedifex.pluginsPath": {
           "type": "string",
           "default": "",
-          "description": "Optional plugin directory passed to the Aedifex CLI via --plugins=."
+          "description": "Optional plugin directory passed to the Aedifex CLI via -plugins."
         },
         "aedifex.theme": {
           "type": "string",
           "default": "",
-          "description": "Optional Aedifex banner theme passed to interactive CLI commands."
+          "description": "Optional Aedifex banner theme passed to interactive CLI commands via -theme."
         }
       }
     },

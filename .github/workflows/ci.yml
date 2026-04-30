@@ -1,0 +1,229 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core-targets:
+    name: ${{ matrix.os }} - ${{ matrix.target }}${{ matrix.qualifierLabel }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: cpp
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsMsvc: true
+          - os: windows-latest
+            target: neko
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsNeko: true
+          - os: windows-latest
+            target: jvm
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsJava: true
+          - os: windows-latest
+            target: php
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsPhp: true
+          - os: windows-latest
+            target: js
+            qualifier: "-node"
+            qualifierLabel: " - node"
+            runTarget: true
+            needsNode: true
+          - os: windows-latest
+            target: js
+            qualifier: "-html5"
+            qualifierLabel: " - html5"
+            runTarget: false
+          - os: ubuntu-latest
+            target: cpp
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+          - os: ubuntu-latest
+            target: hl
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsHashLink: true
+          - os: ubuntu-latest
+            target: neko
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsNeko: true
+          - os: ubuntu-latest
+            target: jvm
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsJava: true
+          - os: ubuntu-latest
+            target: php
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsPhp: true
+          - os: ubuntu-latest
+            target: js
+            qualifier: "-node"
+            qualifierLabel: " - node"
+            runTarget: true
+            needsNode: true
+          - os: ubuntu-latest
+            target: js
+            qualifier: "-html5"
+            qualifierLabel: " - html5"
+            runTarget: false
+          - os: macos-latest
+            target: cpp
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+          - os: macos-latest
+            target: hl
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsHashLink: true
+          - os: macos-latest
+            target: neko
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsNeko: true
+          - os: macos-latest
+            target: jvm
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsJava: true
+          - os: macos-latest
+            target: php
+            qualifier: ""
+            qualifierLabel: ""
+            runTarget: true
+            needsPhp: true
+          - os: macos-latest
+            target: js
+            qualifier: "-node"
+            qualifierLabel: " - node"
+            runTarget: true
+            needsNode: true
+          - os: macos-latest
+            target: js
+            qualifier: "-html5"
+            qualifierLabel: " - html5"
+            runTarget: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: 4.3.7
+
+      - name: Set up MSVC
+        if: matrix.needsMsvc
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set up Java
+        if: matrix.needsJava
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node.js
+        if: matrix.needsNode
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up PHP
+        if: matrix.needsPhp
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+
+      - name: Install HashLink and Neko on Ubuntu
+        if: runner.os == 'Linux' && (matrix.needsHashLink || matrix.needsNeko)
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.needsHashLink }}" = "true" ]; then
+            sudo apt-get install -y hashlink
+          fi
+          if [ "${{ matrix.needsNeko }}" = "true" ]; then
+            sudo apt-get install -y neko
+          fi
+
+      - name: Install HashLink and Neko on macOS
+        if: runner.os == 'macOS' && (matrix.needsHashLink || matrix.needsNeko)
+        run: |
+          brew update
+          if [ "${{ matrix.needsHashLink }}" = "true" ]; then
+            brew install hashlink
+          fi
+          if [ "${{ matrix.needsNeko }}" = "true" ]; then
+            brew install neko
+          fi
+
+      - name: Install HashLink and Neko on Windows
+        if: runner.os == 'Windows' && (matrix.needsHashLink || matrix.needsNeko)
+        shell: pwsh
+        run: |
+          if ("${{ matrix.needsHashLink }}" -eq "true") {
+            choco install hashlink -y
+          }
+          if ("${{ matrix.needsNeko }}" -eq "true") {
+            choco install neko -y
+          }
+
+      - name: Build Aedifex runner
+        run: haxe run.hxml
+
+      - name: Register local Aedifex checkout
+        run: haxelib dev aedifex .
+
+      - name: Setup target
+        shell: pwsh
+        run: |
+          $args = @('run', 'aedifex', 'setup', '${{ matrix.target }}')
+          if ('${{ matrix.qualifier }}' -ne '') { $args += '${{ matrix.qualifier }}' }
+          & haxelib @args
+
+      - name: Verify setup contract
+        shell: pwsh
+        run: |
+          $args = @('run', 'aedifex', 'setup', '${{ matrix.target }}', '-check', '-json')
+          if ('${{ matrix.qualifier }}' -ne '') { $args += '${{ matrix.qualifier }}' }
+          & haxelib @args
+
+      - name: Build example
+        shell: pwsh
+        run: |
+          $args = @('run', 'aedifex', 'build', '${{ matrix.target }}', 'examples/hello-world', '-release', '-ignore')
+          if ('${{ matrix.qualifier }}' -ne '') { $args += '${{ matrix.qualifier }}' }
+          & haxelib @args
+
+      - name: Run example
+        if: matrix.runTarget
+        shell: pwsh
+        run: |
+          $args = @('run', 'aedifex', 'run', '${{ matrix.target }}', 'examples/hello-world', '-release', '-ignore')
+          if ('${{ matrix.qualifier }}' -ne '') { $args += '${{ matrix.qualifier }}' }
+          & haxelib @args
+

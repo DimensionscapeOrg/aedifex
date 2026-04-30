@@ -18,6 +18,8 @@ import aedifex.core.Runner;
 import aedifex.display.DisplayTools;
 import aedifex.plugin.PluginManager;
 import aedifex.release.ReleaseTools;
+import aedifex.setup.SetupStatus;
+import aedifex.setup.TargetSetup;
 import aedifex.util.ANSI;
 import aedifex.util.Intro;
 import aedifex.theme.Themes;
@@ -35,22 +37,23 @@ class Main {
 
 	private static var currentTheme:String;
 	private static var quiet:Bool = false;
+	private static var ignoreQuestions:Bool = false;
 	private static var invocationCwd:String;
 	private static inline final USER_CFG_DIR = ".aedifex";
 	private static inline final USER_CFG_FILE = "config.json";
 	private static var helpMessageText:String = 'Aedifex: lightweight Haxe build tool
 
 Daily use:
-  aedifex create <path> [--plugin] [--library]
-  aedifex build <target> [projectPath] [-clean] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final]
+  aedifex create <path> [-plugin] [-library]
+  aedifex build <target> [projectPath] [-clean] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final] [-ignore]
   aedifex clean [target] [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final]
-  aedifex run <target> [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final]
-  aedifex test <target> [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final]
+  aedifex run <target> [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final] [-ignore]
+  aedifex test <target> [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final] [-ignore]
 
 Tool:
   aedifex rebuild
   aedifex setup [status|remove]
-  aedifex setup <target> [-android|-ios|-html5|-node]
+  aedifex setup <target> [-android|-ios|-html5|-node] [-check] [-json]
 
 Targets:
   cpp | hl | neko | jvm | php | js
@@ -74,44 +77,44 @@ More:
 	private static var fullHelpMessageText:String = 'Aedifex: lightweight Haxe build tool
 
 Project:
-  aedifex create <path> [--plugin] [--library]
-  aedifex build <target> [projectPath] [-clean] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final|--profile PROFILE] [--define KEY[=VAL]]... [--lib LIB]... [--plugins=<dir>]
-  aedifex clean [target] [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final|--profile PROFILE]
-  aedifex run <target> [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final|--profile PROFILE] [--plugins=<dir>]
-  aedifex test <target> [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final|--profile PROFILE] [--plugins=<dir>]
+  aedifex create <path> [-plugin] [-library]
+  aedifex build <target> [projectPath] [-clean] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final|-profile PROFILE] [-ignore] [-define KEY[=VAL]]... [-lib LIB]... [-plugins <dir>]
+  aedifex clean [target] [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final|-profile PROFILE]
+  aedifex run <target> [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final|-profile PROFILE] [-ignore] [-plugins <dir>]
+  aedifex test <target> [projectPath] [-android|-ios|-html5|-node] [-x86|-x64|-arm64|-armv7] [-debug|-release|-final|-profile PROFILE] [-ignore] [-plugins <dir>]
 
 Tool:
   aedifex rebuild
   aedifex setup [status|remove]
-  aedifex setup <target> [-android|-ios|-html5|-node]
+  aedifex setup <target> [-android|-ios|-html5|-node] [-check] [-json]
 
 Inspect:
-  aedifex explain [projectPath] [--target TARGET] [--platform PLATFORM] [--arch ARCH] [-debug|-release|-final|--profile PROFILE] [--json]
-  aedifex targets [projectPath] [--json]
-  aedifex profiles [--json]
-  aedifex tasks [projectPath] [--json]
+  aedifex explain [projectPath] [-target TARGET] [-platform PLATFORM] [-arch ARCH] [-debug|-release|-final|-profile PROFILE] [-json]
+  aedifex targets [projectPath] [-json]
+  aedifex profiles [-json]
+  aedifex tasks [projectPath] [-json]
   aedifex task <name> <projectPath>
 
 Package:
   aedifex haxelib sync [projectPath]
   aedifex haxelib check [projectPath]
   aedifex haxelib export [projectPath]
-  aedifex release package [projectPath] [--validate]
+  aedifex release package [projectPath] [-validate]
   aedifex release validate <zipPath>
 
 Plugins:
   aedifex plugins list
-  aedifex plugins path [--set <dir>]
+  aedifex plugins path [-set <dir>]
 
 Global flags:
-  --quiet            Suppress the banner for compact or machine-driven output
-  --theme=<name>     Select banner theme
-  --plugins=<dir>    Override plugin root for this invocation
+  -quiet             Suppress the banner for compact or machine-driven output
+  -theme <name>      Select banner theme, or use `-theme` alone to choose interactively
+  -plugins <dir>     Override plugin root for this invocation
+  -ignore            Suppress interactive questions and fail cleanly instead
 
 Profiles:
   -debug | -release | -final
-  --debug | --release | --final
-  --profile <name>
+  -profile <name>
 
 Targets:
   cpp | hl | neko | jvm | php | js
@@ -133,9 +136,9 @@ Notes:
 
 These commands exist for editor integration and machine-readable tooling:
 
-  aedifex display sync [projectPath] [--json]
-  aedifex build-plan <target> [projectPath] [--platform PLATFORM] [--arch ARCH] [-debug|-release|-final|--profile PROFILE] [--json]
-  aedifex launch-plan <target> [projectPath] [--platform PLATFORM] [--arch ARCH] [-debug|-release|-final|--profile PROFILE] [--json]
+  aedifex display sync [projectPath] [-json]
+  aedifex build-plan <target> [projectPath] [-platform PLATFORM] [-arch ARCH] [-debug|-release|-final|-profile PROFILE] [-json]
+  aedifex launch-plan <target> [projectPath] [-platform PLATFORM] [-arch ARCH] [-debug|-release|-final|-profile PROFILE] [-json]
 
 Most people should use:
 
@@ -158,16 +161,34 @@ Most people should use:
 		var i = 0;
 		while (i < args.length) {
 			var arg = args[i];
-			if (arg == "--quiet") {
+			if (arg == "-quiet" || arg == "--quiet") {
 				quiet = true;
 				args.splice(i, 1);
 				continue;
 			}
-			if (StringTools.startsWith(arg, "--theme=")) {
-				var themeName = arg.substr("--theme=".length);
-				if (Themes.themeRegistry.exists(themeName)) {
-					currentTheme = themeName;
+			if (arg == "-ignore" || arg == "--ignore") {
+				ignoreQuestions = true;
+				args.splice(i, 1);
+				continue;
+			}
+			if (arg == "-theme" || arg == "--theme") {
+				var themeName = if (i + 1 < args.length && !StringTools.startsWith(args[i + 1], "-")) {
+					var value = args[i + 1];
+					args.splice(i, 2);
+					value;
+				} else {
+					args.splice(i, 1);
+					chooseThemeInteractively();
 				}
+				if (themeName != null) {
+					currentTheme = resolveThemeName(themeName);
+				}
+				continue;
+			}
+			if (StringTools.startsWith(arg, "-theme=") || StringTools.startsWith(arg, "--theme=")) {
+				var prefix = StringTools.startsWith(arg, "-theme=") ? "-theme=" : "--theme=";
+				var themeName = arg.substr(prefix.length);
+				currentTheme = resolveThemeName(themeName);
 				args.splice(i, 1);
 				continue;
 			}
@@ -266,7 +287,7 @@ Most people should use:
 	}
 
 	private static function shouldSuppressBanner(cmd:String, args:Array<String>):Bool {
-		if (hasFlag(args, "--json") || cmd == "profiles") {
+		if (hasFlag(args, "-json") || hasFlag(args, "--json") || cmd == "profiles") {
 			return true;
 		}
 		return cmd == "haxelib" && args.length > 1 && (args[1] == "export" || args[1] == "print");
@@ -279,9 +300,61 @@ Most people should use:
 		return false;
 	}
 
+	private static function resolveThemeName(themeName:String):String {
+		if (themeName == null) {
+			throw "Theme name is required.";
+		}
+		var normalized = StringTools.trim(themeName);
+		if (normalized.length == 0) {
+			throw "Theme name is required.";
+		}
+		if (!Themes.themeRegistry.exists(normalized)) {
+			throw 'Unknown theme: ${normalized}.';
+		}
+		return normalized;
+	}
+
+	private static function chooseThemeInteractively():String {
+		var names = availableThemeNames();
+		if (names.length == 0) {
+			throw "No themes are registered.";
+		}
+		if (ignoreQuestions || !canAskQuestions()) {
+			throw "Theme selection requires a theme name. Available themes: " + names.join(", ");
+		}
+		Sys.println("Available themes:");
+		for (index in 0...names.length) {
+			Sys.println("  " + (index + 1) + ". " + names[index]);
+		}
+		Sys.println("Select a theme by number:");
+		Sys.print("> ");
+		var answer = try {
+			StringTools.trim(Sys.stdin().readLine());
+		} catch (_:Dynamic) {
+			"";
+		}
+		if (answer.length == 0) {
+			throw "Theme selection cancelled.";
+		}
+		var choice = Std.parseInt(answer);
+		if (choice == null || choice < 1 || choice > names.length) {
+			throw "Invalid theme selection.";
+		}
+		return names[choice - 1];
+	}
+
+	private static function availableThemeNames():Array<String> {
+		var names:Array<String> = [];
+		for (name in Themes.themeRegistry.keys()) {
+			names.push(name);
+		}
+		names.sort(function(a, b) return Reflect.compare(a, b));
+		return names;
+	}
+
 	private static function doPlugins(args:Array<String>, currentRoot:String):Void {
 		if (args.length < 2) {
-			Sys.println("plugins commands: list | path [--set <dir>]");
+			Sys.println("plugins commands: list | path [-set <dir>]");
 			return;
 		}
 
@@ -302,8 +375,8 @@ Most people should use:
 				var i = 2;
 				while (i < args.length) {
 					var a = args[i];
-					if (a == "--set") {
-						if (i + 1 >= args.length) throw "--set requires <dir>";
+					if (a == "-set" || a == "--set") {
+						if (i + 1 >= args.length) throw "-set requires <dir>";
 						setTo = Path.normalize(args[i + 1]);
 						i++;
 					} else {
@@ -320,7 +393,7 @@ Most people should use:
 				}
 
 			default:
-				Sys.println("plugins commands: list | path [--set <dir>]");
+				Sys.println("plugins commands: list | path [-set <dir>]");
 		}
 	}
 
@@ -331,9 +404,9 @@ Most people should use:
 		var isLibrary = false;
 		for (i in 2...args.length) {
 			var a = args[i];
-			if (a == "--plugin" || a == "-p") {
+			if (a == "-plugin" || a == "--plugin" || a == "-p") {
 				isPlugin = true;
-			} else if (a == "--library" || a == "-l") {
+			} else if (a == "-library" || a == "--library" || a == "-l") {
 				isLibrary = true;
 			}
 		}
@@ -430,7 +503,29 @@ Most people should use:
 	private static function doTargetSetup(args:Array<String>):Void {
 		var target = ExecutionPlanner.normalizeTarget(args[1]);
 		var options = parseSetupOptions(args, 2);
-		TargetSetup.run(target, options.platform);
+		var status = TargetSetup.run(target, options.platform, options.checkOnly);
+		if (options.json) {
+			printJson(status.toDynamic());
+			if (!status.ready) Sys.exit(1);
+			return;
+		}
+
+		Sys.println("Setting up `" + Std.string(status.target) + "`" + (status.platform != null ? " for `" + Std.string(status.platform) + "`" : "") + "...");
+		for (item in status.installed) {
+			Sys.println("Installed `" + item + "`.");
+		}
+		for (item in status.detected) {
+			Sys.println("Detected `" + item + "`.");
+		}
+		for (item in status.manualSteps) {
+			Sys.println(item);
+		}
+		if (status.ready) {
+			Sys.println("Setup complete.");
+			return;
+		}
+
+		throw setupFailureMessage(status);
 	}
 
 	private static function runCommandIn(cwd:String, exe:String, commandArgs:Array<String>):Int {
@@ -486,7 +581,7 @@ Most people should use:
 
 	private static function hasExplicitProjectPath(args:Array<String>, startIndex:Int):Bool {
 		for (i in startIndex...args.length) {
-			if (!StringTools.startsWith(args[i], "--")) {
+			if (!StringTools.startsWith(args[i], "-")) {
 				return true;
 			}
 		}
@@ -583,16 +678,16 @@ Most people should use:
 	}
 
 	private static function doRelease(args:Array<String>):Void {
-		if (args.length < 2) throw "release commands: package [projectPath] [--validate] | validate <zipPath>";
+		if (args.length < 2) throw "release commands: package [projectPath] [-validate] | validate <zipPath>";
 		switch (args[1]) {
 			case "package":
 				var validate = false;
 				for (i in 2...args.length) {
-					if (args[i] == "--validate") {
+					if (args[i] == "-validate" || args[i] == "--validate") {
 						validate = true;
 					}
 				}
-				var projectPath = parseSimpleProjectPath(args, 2, ["--validate"]);
+				var projectPath = parseSimpleProjectPath(args, 2, ["-validate", "--validate"]);
 				var zipPath = ReleaseTools.packageHaxelib(projectPath, validate);
 				Sys.println("Created haxelib release package: " + zipPath);
 			case "validate":
@@ -600,13 +695,13 @@ Most people should use:
 				ReleaseTools.validateHaxelibPackage(resolveUserPath(args[2]));
 				Sys.println("Validated haxelib release package: " + resolveUserPath(args[2]));
 			default:
-				throw "release commands: package [projectPath] [--validate] | validate <zipPath>";
+				throw "release commands: package [projectPath] [-validate] | validate <zipPath>";
 		}
 	}
 
 	private static function doDisplay(args:Array<String>):Void {
 		if (args.length < 2) {
-			throw "display commands: sync [projectPath] [--json]";
+			throw "display commands: sync [projectPath] [-json]";
 		}
 
 		switch (args[1]) {
@@ -620,7 +715,7 @@ Most people should use:
 					Sys.println("  " + Path.join([result.projectRoot, result.hxmlPath]));
 				}
 			default:
-				throw "display commands: sync [projectPath] [--json]";
+				throw "display commands: sync [projectPath] [-json]";
 		}
 	}
 
@@ -648,6 +743,7 @@ Most people should use:
 		var options = parseExecutionOptions(args, 2, Profile.RELEASE, true);
 		var projectPath = options.projectPath != null ? resolveUserPath(options.projectPath) : invocationCwd;
 		var project = Loader.loadProject(projectPath);
+		ensureTargetReady(project, target, options.platform, options.ignoreSetup);
 		if (options.cleanBuild) {
 			runRebuildLifecycle(project, target, options.platform, options.architecture, options.profile, projectPath, options.extraDefs, options.extraLibs);
 		} else {
@@ -663,6 +759,7 @@ Most people should use:
 		var options = parseExecutionOptions(args, 2, Profile.RELEASE, false);
 		var projectPath = options.projectPath != null ? resolveUserPath(options.projectPath) : invocationCwd;
 		var project = Loader.loadProject(projectPath);
+		ensureTargetReady(project, target, options.platform, options.ignoreSetup);
 		var ctx = createContext(projectPath, project, target, options.platform, options.architecture, options.profile);
 		plugins.preRun(ctx);
 		Runner.run(project, target, options.platform, options.architecture, options.profile, projectPath);
@@ -675,6 +772,7 @@ Most people should use:
 		var options = parseExecutionOptions(args, 2, Profile.DEBUG, true);
 		var projectPath = options.projectPath != null ? resolveUserPath(options.projectPath) : invocationCwd;
 		var project = Loader.loadProject(projectPath);
+		ensureTargetReady(project, target, options.platform, options.ignoreSetup);
 
 		var buildCtx = createContext(projectPath, project, target, options.platform, options.architecture, options.profile);
 		plugins.preBuild(buildCtx);
@@ -770,7 +868,7 @@ Most people should use:
 		startIndex:Int,
 		defaultProfile:Profile,
 		allowBuildFlags:Bool
-	):{profile:Profile, platform:BuildPlatform, architecture:BuildArchitecture, extraDefs:Array<String>, extraLibs:Array<String>, projectPath:Null<String>, cleanBuild:Bool} {
+	):{profile:Profile, platform:BuildPlatform, architecture:BuildArchitecture, extraDefs:Array<String>, extraLibs:Array<String>, projectPath:Null<String>, cleanBuild:Bool, ignoreSetup:Bool} {
 		var profile = defaultProfile;
 		var platform:BuildPlatform = null;
 		var architecture:BuildArchitecture = null;
@@ -778,6 +876,7 @@ Most people should use:
 		var extraLibs:Array<String> = [];
 		var projectPath:Null<String> = null;
 		var cleanBuild = false;
+		var ignoreSetup = false;
 		var i = startIndex;
 		var consumedProjectPath = false;
 
@@ -790,8 +889,8 @@ Most people should use:
 					profile = Profile.RELEASE;
 				case "-final", "--final":
 					profile = Profile.FINAL;
-				case "--profile":
-					if (i + 1 >= args.length) throw "--profile requires PROFILE";
+				case "-profile", "--profile":
+					if (i + 1 >= args.length) throw "-profile requires PROFILE";
 					profile = Profile.normalize(args[++i]);
 				case "-android", "-ios", "-html5", "-node":
 					platform = ExecutionPlanner.normalizePlatform(a);
@@ -800,18 +899,23 @@ Most people should use:
 				case "-clean", "--clean":
 					if (!allowBuildFlags) throw 'Unknown flag: $a';
 					cleanBuild = true;
-				case _ if (StringTools.startsWith(a, "--plugins=")):
-				case "--define":
+				case "-ignore", "--ignore":
+					ignoreSetup = true;
+				case "-plugins", "--plugins":
+					if (i + 1 >= args.length) throw "-plugins requires <dir>";
+					i++;
+				case _ if (StringTools.startsWith(a, "-plugins=") || StringTools.startsWith(a, "--plugins=")):
+				case "-define", "--define":
 					if (!allowBuildFlags) throw 'Unknown flag: $a';
-					if (i + 1 >= args.length) throw "--define requires KEY or KEY=VAL";
+					if (i + 1 >= args.length) throw "-define requires KEY or KEY=VAL";
 					extraDefs.push(args[++i]);
-				case "--lib":
+				case "-lib", "--lib":
 					if (!allowBuildFlags) throw 'Unknown flag: $a';
-					if (i + 1 >= args.length) throw "--lib requires LIB";
+					if (i + 1 >= args.length) throw "-lib requires LIB";
 					extraLibs.push(args[++i]);
-				case "--json":
+				case "-json", "--json":
 				default:
-					if (!StringTools.startsWith(a, "--") && !consumedProjectPath) {
+					if (!StringTools.startsWith(a, "-") && !consumedProjectPath) {
 						consumedProjectPath = true;
 						projectPath = a;
 						i++;
@@ -829,15 +933,18 @@ Most people should use:
 			extraDefs: extraDefs,
 			extraLibs: extraLibs,
 			projectPath: projectPath,
-			cleanBuild: cleanBuild
+			cleanBuild: cleanBuild,
+			ignoreSetup: ignoreSetup
 		};
 	}
 
 	private static function parseSetupOptions(
 		args:Array<String>,
 		startIndex:Int
-	):{platform:BuildPlatform} {
+	):{platform:BuildPlatform, checkOnly:Bool, json:Bool} {
 		var platform:BuildPlatform = null;
+		var checkOnly = false;
+		var json = false;
 		var i = startIndex;
 
 		while (i < args.length) {
@@ -845,6 +952,10 @@ Most people should use:
 			switch (a) {
 				case "-android", "-ios", "-html5", "-node":
 					platform = ExecutionPlanner.normalizePlatform(a);
+				case "-check", "--check":
+					checkOnly = true;
+				case "-json", "--json":
+					json = true;
 				default:
 					throw 'Unknown flag: $a';
 			}
@@ -852,7 +963,9 @@ Most people should use:
 		}
 
 		return {
-			platform: platform
+			platform: platform,
+			checkOnly: checkOnly,
+			json: json
 		};
 	}
 
@@ -875,26 +988,29 @@ Most people should use:
 					profile = Profile.RELEASE;
 				case "-final", "--final":
 					profile = Profile.FINAL;
-				case "--profile":
-					if (i + 1 >= args.length) throw "--profile requires PROFILE";
+				case "-profile", "--profile":
+					if (i + 1 >= args.length) throw "-profile requires PROFILE";
 					profile = Profile.normalize(args[++i]);
-				case "--target":
-					if (i + 1 >= args.length) throw "--target requires TARGET";
+				case "-target", "--target":
+					if (i + 1 >= args.length) throw "-target requires TARGET";
 					target = ExecutionPlanner.normalizeTarget(args[++i]);
-				case "--platform":
-					if (i + 1 >= args.length) throw "--platform requires PLATFORM";
+				case "-platform", "--platform":
+					if (i + 1 >= args.length) throw "-platform requires PLATFORM";
 					platform = ExecutionPlanner.normalizePlatform(args[++i]);
-				case "--arch":
-					if (i + 1 >= args.length) throw "--arch requires ARCH";
+				case "-arch", "--arch":
+					if (i + 1 >= args.length) throw "-arch requires ARCH";
 					architecture = ExecutionPlanner.normalizeArchitecture(args[++i]);
 				case "-android", "-ios", "-html5", "-node":
 					platform = ExecutionPlanner.normalizePlatform(a);
 				case "-x86", "-x64", "-arm64", "-armv7":
 					architecture = ExecutionPlanner.normalizeArchitecture(a);
-				case "--json":
-				case _ if (StringTools.startsWith(a, "--plugins=")):
+				case "-json", "--json":
+				case "-plugins", "--plugins":
+					if (i + 1 >= args.length) throw "-plugins requires <dir>";
+					i++;
+				case _ if (StringTools.startsWith(a, "-plugins=") || StringTools.startsWith(a, "--plugins=")):
 				default:
-					if (!StringTools.startsWith(a, "--")) {
+					if (!StringTools.startsWith(a, "-")) {
 						if (projectPath == null) {
 							projectPath = a;
 						}
@@ -938,6 +1054,58 @@ Most people should use:
 		ctx.project = resolved;
 		ctx.config = Loader.toLegacy(resolved);
 		return ctx;
+	}
+
+	private static function ensureTargetReady(project:ProjectSpec, target:BuildTarget, platform:BuildPlatform, ignoreSetupPrompt:Bool):Void {
+		var effectivePlatform = platform != null ? platform : ExecutionPlanner.defaultPlatform(project, target);
+		var status = TargetSetup.inspect(target, effectivePlatform);
+		if (status.ready) {
+			return;
+		}
+
+		if (ignoreSetupPrompt || ignoreQuestions || !canAskQuestions()) {
+			throw setupFailureMessage(status);
+		}
+
+		Sys.println(status.summary());
+		Sys.println("Run `" + status.setupCommand + "` now? [y/n]");
+		Sys.print("> ");
+		var answer = try {
+			StringTools.trim(Sys.stdin().readLine()).toLowerCase();
+		} catch (_:Dynamic) {
+			"n";
+		}
+
+		if (answer != "y" && answer != "yes") {
+			throw setupFailureMessage(status);
+		}
+
+		var setupStatus = TargetSetup.run(target, effectivePlatform, false);
+		for (item in setupStatus.installed) {
+			Sys.println("Installed `" + item + "`.");
+		}
+		for (item in setupStatus.detected) {
+			Sys.println("Detected `" + item + "`.");
+		}
+		for (item in setupStatus.manualSteps) {
+			Sys.println(item);
+		}
+		if (!setupStatus.ready) {
+			throw setupFailureMessage(setupStatus);
+		}
+	}
+
+	private static function canAskQuestions():Bool {
+		if (quiet) return false;
+		if (Sys.getEnv("CI") != null) return false;
+		if (Sys.getEnv("GITHUB_ACTIONS") != null) return false;
+		if (Sys.getEnv("AEDIFEX_NONINTERACTIVE") == "1") return false;
+		if (Sys.getEnv("AEDIFEX_EDITOR") == "1") return false;
+		return true;
+	}
+
+	private static function setupFailureMessage(status:SetupStatus):String {
+		return status.summary() + " Run `" + status.setupCommand + "`.";
 	}
 
 	private static function describeExtensions(extensions:Array<ExtensionSpec>):Array<Dynamic> {
@@ -1163,7 +1331,7 @@ Most people should use:
 			if (simpleFlags.indexOf(arg) != -1) {
 				continue;
 			}
-			if (!StringTools.startsWith(arg, "--")) {
+			if (!StringTools.startsWith(arg, "-")) {
 				return resolveUserPath(arg);
 			}
 		}
@@ -1175,11 +1343,11 @@ Most people should use:
 		var projectPath = invocationCwd;
 		for (i in startIndex...args.length) {
 			var arg = args[i];
-			if (arg == "--json") {
+			if (arg == "-json" || arg == "--json") {
 				json = true;
 				continue;
 			}
-			if (!StringTools.startsWith(arg, "--")) {
+			if (!StringTools.startsWith(arg, "-")) {
 				projectPath = resolveUserPath(arg);
 				continue;
 			}
@@ -1248,9 +1416,20 @@ Most people should use:
 	}
 
 	private static function resolvePluginsPath(argv:Array<String>):String {
-		for (a in argv) {
-			if (StringTools.startsWith(a, "--plugins=")) {
-				var p = a.substr("--plugins=".length);
+		for (i in 0...argv.length) {
+			var a = argv[i];
+			if (a == "-plugins" || a == "--plugins") {
+				if (i + 1 < argv.length) {
+					var value = argv[i + 1];
+					if (value != null && value != "" && !StringTools.startsWith(value, "-")) {
+						return resolveUserPath(value);
+					}
+				}
+				continue;
+			}
+			if (StringTools.startsWith(a, "-plugins=") || StringTools.startsWith(a, "--plugins=")) {
+				var prefix = StringTools.startsWith(a, "-plugins=") ? "-plugins=" : "--plugins=";
+				var p = a.substr(prefix.length);
 				if (p != "") return resolveUserPath(p);
 			}
 		}
@@ -1279,9 +1458,9 @@ Most people should use:
 		Sys.println("Aedifex: lightweight Haxe build tool");
 		Sys.println("");
 		Sys.println("Start here:");
-		Sys.println("  aedifex build windows . -debug");
-		Sys.println("  aedifex build windows . -final");
-		Sys.println("  aedifex clean windows . -debug");
+		Sys.println("  aedifex build cpp . -debug");
+		Sys.println("  aedifex build cpp . -final");
+		Sys.println("  aedifex clean cpp . -debug");
 		Sys.println("  aedifex run hl .");
 		Sys.println("  aedifex create my-app");
 		Sys.println("  aedifex rebuild");

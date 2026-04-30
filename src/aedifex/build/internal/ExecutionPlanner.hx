@@ -8,6 +8,7 @@ import aedifex.build.Profile;
 import aedifex.build.ProjectSpec;
 import aedifex.build.ProjectSpec.ProjectKind;
 import aedifex.build.ResolvedBackend;
+import aedifex.setup.TargetSetup;
 import aedifex.util.SystemUtil;
 import haxe.io.Path;
 
@@ -67,7 +68,7 @@ class ExecutionPlanner {
 	}
 
 	public static function defaultPlatform(project:ProjectSpec, target:BuildTarget):BuildPlatform {
-		if (project != null && project.defaultPlatform != null) {
+		if (project != null && project.defaultPlatform != null && TargetSetup.isPlatformAllowed(target, project.defaultPlatform)) {
 			return project.defaultPlatform;
 		}
 
@@ -122,20 +123,25 @@ class ExecutionPlanner {
 		var platform = defaultPlatform(project, target);
 		var architecture = defaultArchitecture(project, target, platform);
 		var support = evaluateSupport(project, target, platform, architecture);
+		var setup = inspectSetup(target, platform);
+		var buildSupported = support.buildSupported && (setup == null || setup.ready);
+		var runSupported = support.runSupported && (setup == null || setup.ready);
+		var reason = support.reason != null ? support.reason : (setup != null && !setup.ready ? setup.summary() : null);
 		return {
 			name: Std.string(target),
 			backend: Std.string(resolveBackend(target)),
 			defaultPlatform: platform != null ? Std.string(platform) : null,
 			defaultArchitecture: architecture != null ? Std.string(architecture) : null,
-			platforms: [for (value in platformsFor(target)) Std.string(value)],
+			platforms: [for (value in TargetSetup.explicitQualifiers(target)) Std.string(value)],
 			declared: support.declared,
-			supported: support.buildSupported,
-			buildSupported: support.buildSupported,
-			runSupported: support.runSupported,
+			supported: buildSupported,
+			buildSupported: buildSupported,
+			runSupported: runSupported,
 			hostPlatform: hostInfo().platform,
 			hostArchitecture: hostInfo().architecture,
-			reason: support.reason,
-			hidden: support.hidden
+			reason: reason,
+			hidden: support.hidden,
+			setup: setup != null ? setup.toDynamic() : null
 		};
 	}
 
@@ -150,6 +156,10 @@ class ExecutionPlanner {
 		var effectivePlatform = platform != null ? platform : defaultPlatform(project, target);
 		var effectiveArchitecture = architecture != null ? architecture : defaultArchitecture(project, target, effectivePlatform);
 		var support = evaluateSupport(project, target, effectivePlatform, effectiveArchitecture);
+		var setup = inspectSetup(target, effectivePlatform);
+		var buildSupported = support.buildSupported && (setup == null || setup.ready);
+		var runSupported = support.runSupported && (setup == null || setup.ready);
+		var reason = support.reason != null ? support.reason : (setup != null && !setup.ready ? setup.summary() : null);
 		var resolvedProject = ProjectResolver.resolve(project, target, effectivePlatform, effectiveArchitecture, profile);
 		var paths = outputPaths(projectRoot, resolvedProject, target, effectivePlatform, effectiveArchitecture, profile);
 		return {
@@ -160,17 +170,18 @@ class ExecutionPlanner {
 			architecture: effectiveArchitecture != null ? Std.string(effectiveArchitecture) : null,
 			backend: Std.string(resolveBackend(target)),
 			profile: Std.string(profile),
-			supported: support.buildSupported,
-			buildSupported: support.buildSupported,
-			runSupported: support.runSupported,
+			supported: buildSupported,
+			buildSupported: buildSupported,
+			runSupported: runSupported,
 			host: hostInfo(),
 			constraints: {
 				declared: support.declared,
-				reason: support.reason
+				reason: reason
 			},
 			paths: paths,
 			project: resolvedProject,
 			provides: resolvedProject.provides,
+			setup: setup != null ? setup.toDynamic() : null,
 			launcher: launcherFor(target, effectivePlatform, resolvedProject, paths),
 			compiler: {
 				command: "haxe",
@@ -376,8 +387,7 @@ class ExecutionPlanner {
 					reason = 'Core Aedifex only resolves `${target}` for the matching host platform.';
 				} else {
 					buildSupported = true;
-					runSupported = commandExists("hl");
-					if (!runSupported) reason = "HashLink is not available on PATH.";
+					runSupported = true;
 				}
 
 			case BuildTarget.NEKO:
@@ -387,8 +397,7 @@ class ExecutionPlanner {
 					reason = 'Core Aedifex only resolves `${target}` for the matching host platform.';
 				} else {
 					buildSupported = true;
-					runSupported = commandExists("neko");
-					if (!runSupported) reason = "Neko is not available on PATH.";
+					runSupported = true;
 				}
 
 			case BuildTarget.JVM:
@@ -398,8 +407,7 @@ class ExecutionPlanner {
 					reason = 'Core Aedifex only resolves `${target}` for the matching host platform.';
 				} else {
 					buildSupported = true;
-					runSupported = commandExists("java");
-					if (!runSupported) reason = "Java is not available on PATH.";
+					runSupported = true;
 				}
 
 			case BuildTarget.PHP:
@@ -409,8 +417,7 @@ class ExecutionPlanner {
 					reason = 'Core Aedifex only resolves `${target}` for the matching host platform.';
 				} else {
 					buildSupported = true;
-					runSupported = commandExists("php");
-					if (!runSupported) reason = "PHP is not available on PATH.";
+					runSupported = true;
 				}
 
 			case BuildTarget.JS:
@@ -420,8 +427,7 @@ class ExecutionPlanner {
 						runSupported = true;
 					case BuildPlatform.NODE:
 						buildSupported = true;
-						runSupported = commandExists("node");
-						if (!runSupported) reason = "Node.js is not available on PATH.";
+						runSupported = true;
 					default:
 						reason = 'Platform `${platform}` is not valid for target `${target}`.';
 				}
@@ -526,12 +532,12 @@ class ExecutionPlanner {
 		return tokens;
 	}
 
-	private static function platformsFor(target:BuildTarget):Array<BuildPlatform> {
-		return switch (target) {
-			case BuildTarget.CPP: [BuildPlatform.ANDROID, BuildPlatform.IOS];
-			case BuildTarget.JS: [BuildPlatform.HTML5, BuildPlatform.NODE];
-			default: [];
-		};
+	private static function inspectSetup(target:BuildTarget, platform:BuildPlatform) {
+		try {
+			return TargetSetup.inspect(target, platform);
+		} catch (_:Dynamic) {
+			return null;
+		}
 	}
 
 	private static function defaultArtifactName(project:ProjectSpec):String {
@@ -557,63 +563,4 @@ class ExecutionPlanner {
 		return 'Aedifex `${kind}` roots do not assume a runnable entry point. Add `.mainClass(...)` if this repo should build or run a target.';
 	}
 
-	private static function commandExists(command:String):Bool {
-		if (command == null) return false;
-		var trimmed = StringTools.trim(command);
-		if (trimmed.length == 0) return false;
-
-		var candidates = commandCandidates(trimmed);
-		if (trimmed.indexOf("/") != -1 || trimmed.indexOf("\\") != -1 || Path.isAbsolute(trimmed)) {
-			for (candidate in candidates) {
-				if (isFile(candidate)) return true;
-			}
-			return false;
-		}
-
-		var pathValue = Sys.getEnv("PATH");
-		if (pathValue == null || pathValue.length == 0) {
-			return false;
-		}
-
-		var separator = #if windows ";" #else ":" #end;
-		for (directory in pathValue.split(separator)) {
-			var normalized = StringTools.trim(directory);
-			if (normalized.length == 0) continue;
-			for (candidate in candidates) {
-				if (isFile(Path.join([normalized, candidate]))) {
-					return true;
-				}
-			}
-		}
-
-		return false;
-	}
-
-	private static function commandCandidates(command:String):Array<String> {
-		var candidates = [command];
-		#if windows
-		if (Path.extension(command) == null || Path.extension(command).length == 0) {
-			var extValue = Sys.getEnv("PATHEXT");
-			var extensions = extValue != null && extValue.length > 0 ? extValue.split(";") : [".EXE", ".BAT", ".CMD", ".COM"];
-			for (extension in extensions) {
-				var normalized = StringTools.trim(extension);
-				if (normalized.length == 0) continue;
-				var suffix = StringTools.startsWith(normalized, ".") ? normalized : "." + normalized;
-				var candidate = command + suffix.toLowerCase();
-				if (candidates.indexOf(candidate) == -1) {
-					candidates.push(candidate);
-				}
-				var upper = command + suffix.toUpperCase();
-				if (candidates.indexOf(upper) == -1) {
-					candidates.push(upper);
-				}
-			}
-		}
-		#end
-		return candidates;
-	}
-
-	private static function isFile(path:String):Bool {
-		return sys.FileSystem.exists(path) && !sys.FileSystem.isDirectory(path);
-	}
 }
