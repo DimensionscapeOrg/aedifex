@@ -6,7 +6,7 @@ import aedifex.build.BuildTarget;
 import aedifex.build.Profile;
 import aedifex.build.ProjectSpec;
 import aedifex.build.ProjectSpec.BuildPhase;
-import aedifex.build.internal.ExecutionPlanner;
+import aedifex.build._internal.ExecutionPlanner;
 
 class Runner {
 	public static function run(

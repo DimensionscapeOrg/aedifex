@@ -16,7 +16,5 @@
 	"releasenote": "Second release candidate of the Aedifex.hx-based chassis with target-based commands, library roots, task support, haxelib metadata sync, typed define catalogs, and VS Code extension scaffolding.",
 	"version": "1.0.0-rc.2",
 	"url": "https://github.com/dimensionscape-llc/aedifex",
-	"dependencies": {
-		"hxcpp": ""
-	}
+	"dependencies": {}
 }

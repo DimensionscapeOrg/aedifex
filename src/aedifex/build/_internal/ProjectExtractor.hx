@@ -1,8 +1,8 @@
-package aedifex.build.internal;
+package aedifex.build._internal;
 
 import aedifex.build.ProjectSpec;
-import aedifex.build.internal.ProjectProviderDiscovery.DiscoveredProjectProvider;
-import aedifex.build.internal.ProjectProviderDiscovery.ProjectProviderKind;
+import aedifex.build._internal.ProjectProviderDiscovery.DiscoveredProjectProvider;
+import aedifex.build._internal.ProjectProviderDiscovery.ProjectProviderKind;
 import haxe.Unserializer;
 import haxe.io.Path;
 import sys.FileSystem;

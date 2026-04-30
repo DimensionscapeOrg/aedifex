@@ -13,7 +13,6 @@ class Aedifex {
 		.version("1.0.0-rc.2")
 		.releaseNote("Second release candidate of the Aedifex.hx-based chassis with target-based commands, library roots, task support, haxelib metadata sync, typed define catalogs, and VS Code extension scaffolding.")
 		.contributor("Dimensionscape")
-		.haxelib("hxcpp")
 		.source("src")
 		.mainClass("aedifex.cli.Main")
 		.task("rebuild-native", "haxe", ["build.hxml"], null, "Rebuild the native Aedifex executable.")

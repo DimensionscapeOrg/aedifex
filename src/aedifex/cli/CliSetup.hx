@@ -1,6 +1,6 @@
 package aedifex.cli;
 
-import aedifex.build.internal.ToolEnvironment;
+import aedifex.build._internal.ToolEnvironment;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;

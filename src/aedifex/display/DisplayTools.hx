@@ -2,7 +2,7 @@ package aedifex.display;
 
 import aedifex.build.ProjectSpec;
 import aedifex.build.ProjectSpec.LibrarySpec;
-import aedifex.build.internal.ProjectResolver;
+import aedifex.build._internal.ProjectResolver;
 import aedifex.config.Loader;
 import haxe.io.Path;
 import sys.FileSystem;

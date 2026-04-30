@@ -1,7 +1,7 @@
 package aedifex.release;
 
 import aedifex.build.ProjectSpec;
-import aedifex.build.internal.ProjectResolver;
+import aedifex.build._internal.ProjectResolver;
 import aedifex.config.Loader;
 import aedifex.cli.Main;
 import haxe.crypto.Crc32;

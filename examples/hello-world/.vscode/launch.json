@@ -5,7 +5,7 @@
       "type": "aedifex",
       "request": "launch",
       "name": "Aedifex",
-      "target": "cpp",
+      "target": "neko",
       "profile": "debug"
     }
   ]

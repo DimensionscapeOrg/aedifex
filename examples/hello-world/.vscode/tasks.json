@@ -5,7 +5,7 @@
       "label": "Aedifex",
       "type": "aedifex",
       "command": "build",
-      "target": "cpp",
+      "target": "neko",
       "profile": "debug",
       "clean": false,
       "problemMatcher": []

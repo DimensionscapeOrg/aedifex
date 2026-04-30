@@ -15,7 +15,7 @@
         {
             "label": "Aedifex Root",
             "args": [
-                "c:/Users/Chris/Documents/GitHub/aedifex/examples/hello-world/.aedifex/aedifex.display.hxml"
+                "c:/Users/Chris/Documents/GitHub/aedifex/.aedifex/aedifex.display.hxml"
             ],
             "files": [
                 "Aedifex.hx",

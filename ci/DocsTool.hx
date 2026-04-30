@@ -50,7 +50,7 @@ class DocsTool {
 			"-in", "^aedifex\\.build($|\\.)",
 			"-in", "^aedifex\\.plugin($|\\.)",
 			"-in", "^aedifex\\.core\\.BuildContext$",
-			"-ex", "^aedifex\\.build\\.internal($|\\.)",
+			"-ex", "^aedifex\\.build\\._internal($|\\.)",
 			"-ex", "^aedifex\\.build\\.macros($|\\.)",
 			"-ex", "^aedifex\\.setup($|\\.)",
 			"-ex", "^aedifex\\.cli($|\\.)",

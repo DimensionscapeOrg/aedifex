@@ -1,29 +1,49 @@
 package aedifex.build;
 
+/** Serializable root project model extracted from `Aedifex.hx`. */
 @:structInit
 class ProjectSpec {
+	/** Root kind such as app, library, tool, plugin, or extension. */
 	public var kind:ProjectKind = ProjectKind.APP;
+	/** Human-facing metadata used across docs, packaging, and tooling. */
 	public var meta:MetaSpec = new MetaSpec();
+	/** haxelib-oriented metadata used when syncing or checking `haxelib.json`. */
 	public var haxelib:HaxelibSpec = new HaxelibSpec();
+	/** App/runtime-specific output information. */
 	public var app:AppSpec = new AppSpec();
+	/** Default target used when a command does not provide one explicitly. */
 	public var defaultTarget:BuildTarget = null;
+	/** Default qualifier or platform when one is meaningful for the chosen target. */
 	public var defaultPlatform:BuildPlatform = null;
+	/** Default architecture. */
 	public var defaultArchitecture:BuildArchitecture = null;
+	/** Default profile. */
 	public var defaultProfile:Profile = Profile.DEBUG;
+	/** Source paths included in the project. */
 	public var sources:Array<String> = [];
+	/** Haxe libraries referenced by the project. */
 	public var libraries:Array<LibrarySpec> = [];
+	/** Global defines applied to the project. */
 	public var defines:Array<Define> = [];
+	/** Raw Haxe flags applied to the project. */
 	public var haxeflags:Array<HaxeFlag> = [];
+	/** Global lifecycle hooks. */
 	public var hooks:Array<BuildCommand> = [];
+	/** Declared supported targets and target variants. */
 	public var targets:Array<TargetSpec> = [];
+	/** Conditional target-scoped rules. */
 	public var targetRules:Array<TargetRule> = [];
+	/** Applied extensions. */
 	public var extensions:Array<ExtensionSpec> = [];
+	/** Capabilities this root exposes for tooling and downstream consumers. */
 	public var provides:ProvidedSpec = new ProvidedSpec();
+	/** Named tasks exposed by the project root. */
 	public var tasks:Array<TaskSpec> = [];
 
 	public function new() {}
 }
 
+/** High-level root categories supported by Aedifex. */
 abstract ProjectKind(String) from String to String {
 	public static inline final APP:ProjectKind = "app";
 	public static inline final LIBRARY:ProjectKind = "library";
@@ -32,6 +52,7 @@ abstract ProjectKind(String) from String to String {
 	public static inline final EXTENSION:ProjectKind = "extension";
 }
 
+/** Human-facing project metadata. */
 @:structInit
 class MetaSpec {
 	public var name:String = null;
@@ -44,6 +65,7 @@ class MetaSpec {
 	public function new() {}
 }
 
+/** Package metadata used for haxelib sync/export/check flows. */
 @:structInit
 class HaxelibSpec {
 	public var name:String = null;
@@ -59,6 +81,7 @@ class HaxelibSpec {
 	public function new() {}
 }
 
+/** Runtime-oriented app metadata such as main class and output location. */
 @:structInit
 class AppSpec {
 	public var mainClass:String = null;
@@ -68,6 +91,7 @@ class AppSpec {
 	public function new() {}
 }
 
+/** One Haxe library dependency entry. */
 @:structInit
 class LibrarySpec {
 	public var name:String = "";
@@ -77,6 +101,7 @@ class LibrarySpec {
 
 	public function new() {}
 
+	/** Creates a haxelib dependency specification. */
 	public static function haxelib(name:String, ?path:String, ?version:String, ?condition:BuildCondition):LibrarySpec {
 		var library = new LibrarySpec();
 		library.name = name;
@@ -87,6 +112,7 @@ class LibrarySpec {
 	}
 }
 
+/** One raw Haxe compiler flag entry. */
 @:structInit
 class HaxeFlag {
 	public var name:String = "";
@@ -95,6 +121,7 @@ class HaxeFlag {
 
 	public function new() {}
 
+	/** Creates a named Haxe compiler flag, with optional value and condition. */
 	public static function named(name:String, ?value:String, ?condition:BuildCondition):HaxeFlag {
 		var flag = new HaxeFlag();
 		flag.name = name;
@@ -104,6 +131,7 @@ class HaxeFlag {
 	}
 }
 
+/** One lifecycle command invoked around build, run, or finalization phases. */
 @:structInit
 class BuildCommand {
 	public var command:String = "";
@@ -114,6 +142,7 @@ class BuildCommand {
 
 	public function new() {}
 
+	/** Creates a pre-build hook command. */
 	public static function prebuild(command:String, ?args:Array<String>, ?cwd:String, ?condition:BuildCondition):BuildCommand {
 		var hook = new BuildCommand();
 		hook.command = command;
@@ -124,6 +153,7 @@ class BuildCommand {
 		return hook;
 	}
 
+	/** Creates a post-build hook command. */
 	public static function postbuild(command:String, ?args:Array<String>, ?cwd:String, ?condition:BuildCondition):BuildCommand {
 		var hook = new BuildCommand();
 		hook.command = command;
@@ -134,6 +164,7 @@ class BuildCommand {
 		return hook;
 	}
 
+	/** Creates a pre-run hook command. */
 	public static function preRun(command:String, ?args:Array<String>, ?cwd:String, ?condition:BuildCondition):BuildCommand {
 		var hook = new BuildCommand();
 		hook.command = command;
@@ -144,6 +175,7 @@ class BuildCommand {
 		return hook;
 	}
 
+	/** Creates a post-run hook command. */
 	public static function postRun(command:String, ?args:Array<String>, ?cwd:String, ?condition:BuildCondition):BuildCommand {
 		var hook = new BuildCommand();
 		hook.command = command;
@@ -154,6 +186,7 @@ class BuildCommand {
 		return hook;
 	}
 
+	/** Creates a pre-finalize hook command. */
 	public static function preFinalize(command:String, ?args:Array<String>, ?cwd:String, ?condition:BuildCondition):BuildCommand {
 		var hook = new BuildCommand();
 		hook.command = command;
@@ -164,6 +197,7 @@ class BuildCommand {
 		return hook;
 	}
 
+	/** Creates a post-finalize hook command. */
 	public static function postFinalize(command:String, ?args:Array<String>, ?cwd:String, ?condition:BuildCondition):BuildCommand {
 		var hook = new BuildCommand();
 		hook.command = command;
@@ -175,6 +209,7 @@ class BuildCommand {
 	}
 }
 
+/** Lifecycle phases recognized by Aedifex hooks. */
 abstract BuildPhase(String) from String to String {
 	public static inline final PRE_RESOLVE:BuildPhase = "preResolve";
 	public static inline final POST_RESOLVE:BuildPhase = "postResolve";
@@ -186,6 +221,7 @@ abstract BuildPhase(String) from String to String {
 	public static inline final POST_FINALIZE:BuildPhase = "postFinalize";
 }
 
+/** Declares one supported target variant for a project root. */
 @:structInit
 class TargetSpec {
 	public var name:BuildTarget = null;
@@ -197,6 +233,7 @@ class TargetSpec {
 
 	public function new() {}
 
+	/** Creates a supported target declaration. */
 	public static function named(
 		name:BuildTarget,
 		?platform:BuildPlatform,
@@ -216,6 +253,7 @@ class TargetSpec {
 	}
 }
 
+/** One applied or exported extension reference. */
 @:structInit
 class ExtensionSpec {
 	public var name:String = "";
@@ -226,6 +264,7 @@ class ExtensionSpec {
 
 	public function new() {}
 
+	/** Creates a stored extension reference. */
 	public static function named(
 		name:String,
 		?options:Dynamic,
@@ -254,6 +293,7 @@ class ExtensionSpec {
 	}
 }
 
+/** Capability description exposed by a project extension. */
 @:structInit
 class ExtensionCapabilities {
 	public var description:String = null;
@@ -264,6 +304,7 @@ class ExtensionCapabilities {
 
 	public function new() {}
 
+	/** Creates a capability description object. */
 	public static function create(
 		?description:String,
 		?defineCatalogs:Array<String>,
@@ -281,11 +322,13 @@ class ExtensionCapabilities {
 	}
 }
 
+/** Distinguishes class-backed extensions from named external extension references. */
 abstract ExtensionSource(String) from String to String {
 	public static inline final CLASS:ExtensionSource = "class";
 	public static inline final NAMED:ExtensionSource = "named";
 }
 
+/** Capabilities this project root advertises to tooling and downstream users. */
 @:structInit
 class ProvidedSpec {
 	public var defineCatalogs:Array<String> = [];
@@ -297,6 +340,7 @@ class ProvidedSpec {
 	public function new() {}
 }
 
+/** One named task exposed from a project root. */
 @:structInit
 class TaskSpec {
 	public var name:String = "";
@@ -308,6 +352,7 @@ class TaskSpec {
 
 	public function new() {}
 
+	/** Creates a named task specification. */
 	public static function named(
 		name:String,
 		command:String,
@@ -327,6 +372,7 @@ class TaskSpec {
 	}
 }
 
+/** Conditional rule applied to a subset of target/profile/token combinations. */
 @:structInit
 class TargetRule {
 	public var condition:BuildCondition = null;

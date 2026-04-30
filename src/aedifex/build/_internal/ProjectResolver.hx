@@ -1,4 +1,4 @@
-package aedifex.build.internal;
+package aedifex.build._internal;
 
 import aedifex.build.BuildCondition;
 import aedifex.build.BuildArchitecture;

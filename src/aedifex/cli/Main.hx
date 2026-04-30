@@ -10,8 +10,8 @@ import aedifex.build.ProjectSpec.ExtensionCapabilities;
 import aedifex.build.ProjectSpec.ExtensionSpec;
 import aedifex.build.ProjectSpec.HaxelibSpec;
 import aedifex.build.ProjectSpec.TaskSpec;
-import aedifex.build.internal.ExecutionPlanner;
-import aedifex.build.internal.ToolEnvironment;
+import aedifex.build._internal.ExecutionPlanner;
+import aedifex.build._internal.ToolEnvironment;
 import aedifex.core.BuildContext;
 import aedifex.core.Builder;
 import aedifex.core.Runner;
@@ -622,7 +622,7 @@ Most people should use:
 	private static function doTasks(args:Array<String>):Void {
 		var projectPath = parseSimpleProjectPath(args, 1);
 		var project = Loader.loadProject(projectPath);
-		var resolved = aedifex.build.internal.ProjectResolver.resolve(project);
+		var resolved = aedifex.build._internal.ProjectResolver.resolve(project);
 		printJson({
 			projectRoot: Path.normalize(projectPath),
 			kind: Std.string(resolved.kind),
@@ -635,7 +635,7 @@ Most people should use:
 		var taskName = args[1];
 		var projectPath = resolveUserPath(args[2]);
 		var project = Loader.loadProject(projectPath);
-		var resolved = aedifex.build.internal.ProjectResolver.resolve(project);
+		var resolved = aedifex.build._internal.ProjectResolver.resolve(project);
 		var task = findTask(resolved.tasks, taskName);
 		if (task == null) {
 			throw 'Unknown task `${taskName}`.';
@@ -1217,7 +1217,7 @@ Most people should use:
 
 	private static function renderHaxelibJson(projectPath:String, ?baseTemplate:Dynamic):String {
 		var project = Loader.loadProject(projectPath);
-		var resolved = aedifex.build.internal.ProjectResolver.resolve(project);
+		var resolved = aedifex.build._internal.ProjectResolver.resolve(project);
 		return buildHaxelibJson(resolved, baseTemplate);
 	}
 

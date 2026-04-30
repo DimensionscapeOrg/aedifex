@@ -25,11 +25,11 @@ Public build model:
 
 Planning and resolution:
 
-- `src/aedifex/build/internal/ExecutionPlanner.hx`
-- `src/aedifex/build/internal/ProjectResolver.hx`
-- `src/aedifex/build/internal/ProjectProviderDiscovery.hx`
-- `src/aedifex/build/internal/ProjectExtractor.hx`
-- `src/aedifex/build/internal/ToolEnvironment.hx`
+- `src/aedifex/build/_internal/ExecutionPlanner.hx`
+- `src/aedifex/build/_internal/ProjectResolver.hx`
+- `src/aedifex/build/_internal/ProjectProviderDiscovery.hx`
+- `src/aedifex/build/_internal/ProjectExtractor.hx`
+- `src/aedifex/build/_internal/ToolEnvironment.hx`
 
 Build and run:
 
