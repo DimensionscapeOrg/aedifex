@@ -31,7 +31,7 @@ class Intro {
 	private static function showPlain(version:String):Void {
 		Sys.println("");
 		Sys.println("Aedifex " + version);
-		Sys.println("lightweight Haxe build tool");
+		Sys.println("extensible Haxe build tool");
 		Sys.println("");
 	}
 

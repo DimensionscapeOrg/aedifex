@@ -41,7 +41,7 @@ class Main {
 	private static var invocationCwd:String;
 	private static inline final USER_CFG_DIR = ".aedifex";
 	private static inline final USER_CFG_FILE = "config.json";
-	private static var helpMessageText:String = 'Aedifex: lightweight Haxe build tool
+	private static var helpMessageText:String = 'Aedifex: extensible Haxe build tool
 
 Daily use:
   aedifex create <path> [-plugin] [-library]
@@ -75,7 +75,7 @@ More:
   aedifex build js . -node
   aedifex build cpp . -ios -final';
 
-	private static var fullHelpMessageText:String = 'Aedifex: lightweight Haxe build tool
+	private static var fullHelpMessageText:String = 'Aedifex: extensible Haxe build tool
 
 Project:
   aedifex create <path> [-plugin] [-library]
@@ -1463,7 +1463,7 @@ Most people should use:
 	}
 
 	private static function welcome():Void {
-		Sys.println("Aedifex: lightweight Haxe build tool");
+		Sys.println("Aedifex: extensible Haxe build tool");
 		Sys.println("");
 		Sys.println("Start here:");
 		Sys.println("  aedifex build cpp . -debug");
