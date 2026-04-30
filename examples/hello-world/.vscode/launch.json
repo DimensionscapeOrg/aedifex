@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "aedifex",
+      "request": "launch",
+      "name": "Aedifex",
+      "target": "cpp",
+      "profile": "debug"
+    }
+  ]
+}

@@ -22,6 +22,47 @@ class ANSI {
 		return Sys.getEnv("WT_SESSION") != null || Sys.getEnv("ConEmuANSI") == "ON" || Sys.getEnv("ANSICON") != null;
 	}
 
+	public static function prefersRichBanner():Bool {
+		var term:String = (Sys.getEnv("TERM") : String);
+		var termL:String = term == null ? null : term.toLowerCase();
+		if (termL == "dumb") {
+			return false;
+		}
+
+		if (!enabled || !utf8Likely) {
+			return false;
+		}
+
+		var runningViaHaxelib = Sys.getEnv("HAXELIB_RUN") == "1";
+		if (runningViaHaxelib && Sys.systemName().toLowerCase() == "windows" && !vtWindows()) {
+			return false;
+		}
+
+		return truecolor || ansi256;
+	}
+
+	public static function prefersBannerArt():Bool {
+		if (Sys.getEnv("AEDIFEX_MINIMAL") == "1") {
+			return false;
+		}
+
+		var columns:String = (Sys.getEnv("COLUMNS") : String);
+		if (columns != null) {
+			var parsed = Std.parseInt(columns);
+			if (parsed != null && parsed < 68) {
+				return false;
+			}
+		}
+
+		var term:String = (Sys.getEnv("TERM") : String);
+		var termL:String = term == null ? null : term.toLowerCase();
+		if (Sys.getEnv("CI") != null && termL == "dumb") {
+			return false;
+		}
+
+		return true;
+	}
+
 	public static function detect():Void {
 		var sysName:String = Sys.systemName().toLowerCase();
 		var noColor:Bool = Sys.getEnv("NO_COLOR") != null;

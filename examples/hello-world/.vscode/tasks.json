@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Aedifex",
+      "type": "aedifex",
+      "command": "build",
+      "target": "cpp",
+      "profile": "debug",
+      "clean": false,
+      "problemMatcher": []
+    }
+  ]
+}

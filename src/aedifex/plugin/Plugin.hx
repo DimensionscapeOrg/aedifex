@@ -23,6 +23,7 @@ class Plugin extends Process {
 	private var _reader:Thread;
 	private var _errReader:Thread;
 	private var _running:Bool = true;
+	private var _stderrOut = Sys.stderr();
 
 	private var _awaiting:Bool = false;
 	private var _awaitingTicket:Int = 0;
@@ -38,7 +39,8 @@ class Plugin extends Process {
 		_errReader = Thread.create(() -> {
 			try {
 				while (_running) {
-					Sys.println("[plugin:" + name + "] " + this.stderr.readLine());
+					_stderrOut.writeString("[plugin:" + name + "] " + this.stderr.readLine() + "\n");
+					_stderrOut.flush();
 				}
 			} catch (e:Dynamic) {}
 		});
@@ -169,8 +171,6 @@ class Plugin extends Process {
 		var resp:PluginResponse = this.call("plugin.init", [{hostVersion: version, protocol: 1}], 5.0);
 		if (!resp.ok) {
 			return false;
-		} else {
-			Sys.println('[$name] plugin loaded');
 		}
 
 		var info:Dynamic = resp.result;
@@ -238,7 +238,7 @@ class Plugin extends Process {
 		Reflect.setField(classT, field, value);
 	}
 
-	override public function close():Void {
+	public function shutdown():Void {
 		_running = false;
 
 		try {
@@ -248,7 +248,7 @@ class Plugin extends Process {
 
 	private inline function ensureReady():Void {
 		if (!_ready) {
-			if (!init("0.1.0")) {
+			if (!init(aedifex.AedifexInfo.version)) {
 				throw 'Plugin ${name} failed init()';
 			}
 		}

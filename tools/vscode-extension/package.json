@@ -1,0 +1,149 @@
+{
+  "name": "aedifex-vscode",
+  "displayName": "Aedifex",
+  "description": "VS Code support for Aedifex projects.",
+  "version": "1.0.0-rc.2",
+  "publisher": "dimensionscape",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "extensionDependencies": [
+    "nadako.vshaxe"
+  ],
+  "categories": [
+    "Debuggers",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:haxe",
+    "workspaceContains:Aedifex.hx",
+    "onDebugInitialConfigurations",
+    "onDebugResolve:aedifex"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aedifex.selectTarget",
+        "title": "Aedifex: Select Target"
+      },
+      {
+        "command": "aedifex.selectProfile",
+        "title": "Aedifex: Select Profile"
+      },
+      {
+        "command": "aedifex.build",
+        "title": "Aedifex: Build"
+      },
+      {
+        "command": "aedifex.clean",
+        "title": "Aedifex: Clean"
+      },
+      {
+        "command": "aedifex.run",
+        "title": "Aedifex: Run"
+      },
+      {
+        "command": "aedifex.debug",
+        "title": "Aedifex: Debug"
+      },
+      {
+        "command": "aedifex.rebuild",
+        "title": "Aedifex: Rebuild Tool"
+      },
+      {
+        "command": "aedifex.task",
+        "title": "Aedifex: Run Task"
+      },
+      {
+        "command": "aedifex.refresh",
+        "title": "Aedifex: Refresh Project State"
+      }
+    ],
+    "configuration": {
+      "title": "Aedifex",
+      "properties": {
+        "aedifex.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path or command for the Aedifex CLI, such as `aedifex`, `aedifex.cmd`, or `run.n`."
+        },
+        "aedifex.pluginsPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional plugin directory passed to the Aedifex CLI via --plugins=."
+        },
+        "aedifex.theme": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Aedifex banner theme passed to interactive CLI commands."
+        }
+      }
+    },
+    "debuggers": [
+      {
+        "type": "aedifex",
+        "label": "Aedifex",
+        "languages": [
+          "haxe"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "type",
+              "request",
+              "name"
+            ],
+            "properties": {
+              "target": {
+                "type": "string",
+                "description": "Optional target override for this debug launch."
+              },
+              "profile": {
+                "type": "string",
+                "description": "Optional profile override for this debug launch."
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "aedifex",
+            "request": "launch",
+            "name": "Aedifex"
+          }
+        ]
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "aedifex",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The Aedifex command to execute."
+          },
+          "target": {
+            "type": "string",
+            "description": "The active Aedifex target."
+          },
+          "profile": {
+            "type": "string",
+            "description": "The active Aedifex profile."
+          },
+          "clean": {
+            "type": "boolean",
+            "description": "Whether the build should run with -clean."
+          }
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "lint": "echo No lint configured"
+  }
+}
+

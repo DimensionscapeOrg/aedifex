@@ -1,5 +1,6 @@
 package aedifex.plugin;
 
+import aedifex.core.BuildContext;
 import haxe.ds.StringMap;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -31,12 +32,12 @@ class PluginManager {
 	private function load(path:String):Void {
 		var plugin:Plugin = new Plugin(path);
 		try {
-			if (!plugin.init(Aedifex.version)) {
-				plugin.close();
+			if (!plugin.init(aedifex.AedifexInfo.version)) {
+				plugin.shutdown();
 				return;
 			}
 		} catch (_:Dynamic) {
-			plugin.close();
+			plugin.shutdown();
 			return;
 		}
 		_plugins.set(plugin.name, plugin);
@@ -77,4 +78,37 @@ class PluginManager {
 		}
 		return paths;
 	}
+
+	public function postBuild(ctx:BuildContext):Void {
+		callHook("hook.postBuild", ctx);
+	}
+
+	public function preBuild(ctx:BuildContext):Void {
+		callHook("hook.preBuild", ctx);
+	}
+
+	public function preRun(ctx:BuildContext):Void {
+		callHook("hook.preRun", ctx);
+	}
+
+	public function postRun(ctx:BuildContext):Void {
+		callHook("hook.postRun", ctx);
+	}
+
+	public function preFinalize(ctx:BuildContext):Void {
+		callHook("hook.preFinalize", ctx);
+	}
+
+	public function postFinalize(ctx:BuildContext):Void {
+		callHook("hook.postFinalize", ctx);
+	}
+
+	private function callHook(method:String, ctx:BuildContext):Void {
+		for (plugin in _plugins) {
+			try {
+				plugin.call(method, [ctx]);
+			} catch (_:Dynamic) {}
+		}
+	}
 }
+

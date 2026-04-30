@@ -1,13 +1,9 @@
--cp src 
--cpp bin
--main aedifex.cli.Main 
--D HAXE_OUTPUT_PART=Aedifex
+-cp src
+-neko run.n
+-main aedifex.cli.Main
 --resource template/haxe/Aedifex.hx@aedifex-template
 --resource template/haxe/AedifexLibrary.hx@aedifex-library-template
 --resource template/haxe/ProjectDefines.hx@project-defines-template
---resource template/haxe/Main.hx@main-template 
---resource template/haxe/ProgramMain.hx@ProgramMain  
+--resource template/haxe/Main.hx@main-template
+--resource template/haxe/ProgramMain.hx@ProgramMain
 --resource template/plugin/PluginWire.hx@PluginWire
--D windows="1"
--D HXCPP_DEBUGGER
-

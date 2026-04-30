@@ -1,14 +1,22 @@
 {
 	"name": "aedifex",
-	"url": "https://github.com/dimensionscape-llc/aedifex",
 	"license": "GPL",
-	"tags": ["build", "tools"],
-	"description": "Cross platform build tools",
-	"version": "0.1.0",
-	"releasenote": "Major refactor, themes",
-	"contributors": [		
+	"tags": [
+		"haxe",
+		"build",
+		"tool",
+		"cli",
+		"automation"
+	],
+	"classPath": "src",
+	"description": "Haxe build tool with typed Aedifex.hx project roots, library metadata sync, task automation, and extension support.",
+	"contributors": [
 		"Dimensionscape"
 	],
-	"dependencies": {},
-	"classPath": "src"
+	"releasenote": "Second release candidate of the Aedifex.hx-based chassis with target-based commands, library roots, task support, haxelib metadata sync, typed define catalogs, and VS Code extension scaffolding.",
+	"version": "1.0.0-rc.2",
+	"url": "https://github.com/dimensionscape-llc/aedifex",
+	"dependencies": {
+		"hxcpp": ""
+	}
 }

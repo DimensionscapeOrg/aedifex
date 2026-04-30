@@ -17,6 +17,9 @@ class Command {
 
 	public function run():Int {
 		var exe:String = args.shift();
+		if (args.length == 0) {
+			return Sys.command(exe);
+		}
 		return Sys.command(exe, args);
 	}
 }

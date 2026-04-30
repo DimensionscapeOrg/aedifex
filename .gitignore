@@ -1,2 +1,14 @@
 
 *.zip
+docs/
+dist/
+.aedifex/
+bin/include/
+bin/obj/
+bin/src/
+bin/*.hash
+bin/*.exp
+bin/*.lib
+bin/Build.xml
+bin/HxcppConfig-*.h
+bin/Options.txt

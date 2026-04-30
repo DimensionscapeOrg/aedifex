@@ -93,16 +93,22 @@ typedef Response = {
 typedef BuildContext = {
 	var projectRoot:String;
 	var target:String;
+	@:optional var backend:String;
+	@:optional var host:String;
+	@:optional var platform:String;
+	@:optional var architecture:String;
 	var profile:String;
 	var outDir:String;
 	var binDir:String;
 	var objDir:String;
 	var haxeDir:String;
+	var srcDir:String;
 	@:optional var defines:Array<String>;
 	@:optional var libs:Array<String>;
-	@:optional var env:Dynamic<String>;
+	@:optional var env:String;
 	@:optional var files:Array<String>;
 	@:optional var config:Dynamic;
+	@:optional var project:Dynamic;
 	@:optional var changed:Array<String>;
 }
 
@@ -141,6 +147,22 @@ class Handlers {
 		return {ok: true};
 	}
 
+	public static function preRun(ctx:BuildContext):Dynamic {
+		return {ok: true};
+	}
+
+	public static function postRun(ctx:BuildContext):Dynamic {
+		return {ok: true};
+	}
+
+	public static function preFinalize(ctx:BuildContext):Dynamic {
+		return {ok: true};
+	}
+
+	public static function postFinalize(ctx:BuildContext):Dynamic {
+		return {ok: true};
+	}
+
 	public static function commandRun(p:CommandParams):Dynamic {
 		return switch (p.name) {
 			case "themes:list": {ok: true, themes: ["cyber", "aurora", "red"]};
@@ -164,6 +186,22 @@ class Dispatch {
 				case "hook.postBuild":
 					final ctx2:BuildContext = (c.args != null && c.args.length > 0) ? c.args[0] : null;
 					{result: Handlers.postBuild(ctx2)};
+
+				case "hook.preRun":
+					final ctx3:BuildContext = (c.args != null && c.args.length > 0) ? c.args[0] : null;
+					{result: Handlers.preRun(ctx3)};
+
+				case "hook.postRun":
+					final ctx4:BuildContext = (c.args != null && c.args.length > 0) ? c.args[0] : null;
+					{result: Handlers.postRun(ctx4)};
+
+				case "hook.preFinalize":
+					final ctx5:BuildContext = (c.args != null && c.args.length > 0) ? c.args[0] : null;
+					{result: Handlers.preFinalize(ctx5)};
+
+				case "hook.postFinalize":
+					final ctx6:BuildContext = (c.args != null && c.args.length > 0) ? c.args[0] : null;
+					{result: Handlers.postFinalize(ctx6)};
 
 				case "command.run":
 					final p2:CommandParams = (c.args != null && c.args.length > 0) ? c.args[0] : {name: "", argv: []};
