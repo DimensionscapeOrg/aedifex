@@ -5,6 +5,7 @@ const vscode = require('vscode');
 
 const TARGET_KEY = 'aedifex.target';
 const PROFILE_KEY = 'aedifex.profile';
+const RUNNABLE_ROOT_KEY = 'aedifex.runnableRoot';
 const HAXE_CONFIG_LABEL = 'Aedifex Root';
 const DEFAULT_PROFILES = ['debug', 'release', 'final'];
 
@@ -79,6 +80,7 @@ async function refreshStatusBar() {
       cleanItem.hide();
       return;
     }
+    await rememberRunnableWorkspace(folder);
     const target = await getSelectedTarget(folder, explain.defaults ? explain.defaults.target : null);
     const profile = await getSelectedProfile(folder, explain.defaults ? explain.defaults.profile : null);
     await ensureLaunchConfiguration(folder, explain, target, profile);
@@ -603,7 +605,27 @@ function profileStateKey(folder) {
   return `${PROFILE_KEY}:${folder.uri.fsPath}`;
 }
 
+function runnableRootStateKey(folder) {
+  return `${RUNNABLE_ROOT_KEY}:${workspaceSessionKey(folder)}`;
+}
+
 function getActiveAedifexWorkspace() {
+  const candidate = getActiveAedifexWorkspaceCandidate();
+  if (!candidate) {
+    return null;
+  }
+
+  if (isAedifexToolCheckout(candidate)) {
+    const remembered = getRememberedRunnableWorkspace(candidate);
+    if (remembered) {
+      return remembered;
+    }
+  }
+
+  return candidate;
+}
+
+function getActiveAedifexWorkspaceCandidate() {
   const folders = vscode.workspace.workspaceFolders || [];
   const activeEditor = vscode.window.activeTextEditor;
   if (activeEditor && activeEditor.document && activeEditor.document.uri && activeEditor.document.uri.scheme === 'file') {
@@ -618,6 +640,50 @@ function getActiveAedifexWorkspace() {
     return active;
   }
   return folders.find((folder) => hasAedifexProject(folder));
+}
+
+function owningWorkspacePath(folder) {
+  if (!folder || !folder.uri) {
+    return '';
+  }
+  const owner = vscode.workspace.getWorkspaceFolder(folder.uri);
+  return owner ? owner.uri.fsPath : folder.uri.fsPath;
+}
+
+function workspaceSessionKey(folder) {
+  if (!folder || !folder.uri) {
+    return '';
+  }
+  const checkoutRoot = findOwningAedifexToolCheckout(folder);
+  if (checkoutRoot) {
+    return checkoutRoot;
+  }
+  return owningWorkspacePath(folder);
+}
+
+async function rememberRunnableWorkspace(folder) {
+  if (!extensionContext || !folder || !folder.uri) {
+    return;
+  }
+  await extensionContext.workspaceState.update(runnableRootStateKey(folder), folder.uri.fsPath);
+}
+
+function getRememberedRunnableWorkspace(folder) {
+  if (!extensionContext || !folder || !folder.uri) {
+    return null;
+  }
+  const savedPath = extensionContext.workspaceState.get(runnableRootStateKey(folder));
+  if (!savedPath || typeof savedPath !== 'string') {
+    return null;
+  }
+  if (!fs.existsSync(path.join(savedPath, 'Aedifex.hx'))) {
+    return null;
+  }
+  const saved = workspaceLike(savedPath);
+  if (workspaceSessionKey(saved) !== workspaceSessionKey(folder)) {
+    return null;
+  }
+  return saved;
 }
 
 function findAedifexRoot(filePath) {

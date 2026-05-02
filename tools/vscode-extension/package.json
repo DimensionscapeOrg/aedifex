@@ -2,8 +2,9 @@
   "name": "vs-aedifex",
   "displayName": "Aedifex for VS Code",
   "description": "Official Visual Studio Code support for Aedifex projects.",
-  "version": "1.0.3",
+  "version": "1.0.6",
   "publisher": "dimensionscape",
+  "icon": "icon.png",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -151,4 +152,6 @@
     "lint": "echo No lint configured"
   }
 }
+
+
 
