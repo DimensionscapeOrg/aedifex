@@ -105,6 +105,22 @@
                 "type": "string",
                 "description": "Optional target override for this debug launch."
               },
+              "targetLabel": {
+                "type": "string",
+                "description": "Optional display label for a plugin-provided target entry."
+              },
+              "targetSource": {
+                "type": "string",
+                "description": "Optional target provider identifier such as `aedifex` or `plugin`."
+              },
+              "platform": {
+                "type": "string",
+                "description": "Optional platform qualifier passed through to Aedifex."
+              },
+              "architecture": {
+                "type": "string",
+                "description": "Optional architecture qualifier passed through to Aedifex."
+              },
               "profile": {
                 "type": "string",
                 "description": "Optional profile override for this debug launch."
@@ -135,6 +151,22 @@
           "target": {
             "type": "string",
             "description": "The active Aedifex target."
+          },
+          "targetLabel": {
+            "type": "string",
+            "description": "Optional display label for a plugin-provided target entry."
+          },
+          "targetSource": {
+            "type": "string",
+            "description": "Optional target provider identifier such as `aedifex` or `plugin`."
+          },
+          "platform": {
+            "type": "string",
+            "description": "Optional platform qualifier passed through to Aedifex."
+          },
+          "architecture": {
+            "type": "string",
+            "description": "Optional architecture qualifier passed through to Aedifex."
           },
           "profile": {
             "type": "string",

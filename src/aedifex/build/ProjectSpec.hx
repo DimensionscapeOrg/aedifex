@@ -1,5 +1,7 @@
 package aedifex.build;
 
+import haxe.Json;
+
 /** Serializable root project model extracted from `Aedifex.hx`. */
 @:structInit
 class ProjectSpec {
@@ -274,7 +276,7 @@ class ExtensionSpec {
 	):ExtensionSpec {
 		var extension = new ExtensionSpec();
 		extension.name = name;
-		extension.options = options;
+		extension.options = normalizeOptions(options);
 		extension.condition = BuildCondition.clone(condition);
 		extension.source = source != null ? source : ExtensionSource.NAMED;
 		extension.capabilities = capabilities != null ? cloneCapabilities(capabilities) : new ExtensionCapabilities();
@@ -290,6 +292,15 @@ class ExtensionSpec {
 		copy.targets = value.targets != null ? value.targets.copy() : [];
 		copy.profiles = value.profiles != null ? value.profiles.copy() : [];
 		return copy;
+	}
+
+	private static function normalizeOptions(value:Dynamic):Dynamic {
+		if (value == null) return null;
+		try {
+			return Json.parse(Json.stringify(value));
+		} catch (_:Dynamic) {
+			return value;
+		}
 	}
 }
 

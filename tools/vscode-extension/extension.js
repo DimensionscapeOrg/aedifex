@@ -50,7 +50,8 @@ async function activate(context) {
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => refreshStatusBar()));
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((document) => {
     const name = path.basename(document.fileName).toLowerCase();
-    if (name === 'aedifex.hx' || name === 'projectdefines.hx') {
+    const pluginDirSegment = `${path.sep}.aedifex${path.sep}plugins${path.sep}`;
+    if (name === 'aedifex.hx' || name === 'projectdefines.hx' || document.fileName.includes(pluginDirSegment)) {
       refreshStatusBar();
     }
   }));
@@ -72,7 +73,8 @@ async function refreshStatusBar() {
     const displayPayload = await syncDisplayProvider(folder);
     await applyGeneratedHaxeConfiguration(folder, displayPayload);
     const explain = await getExplain(folder);
-    if (!hasSelectableTargets(explain)) {
+    const targetCatalog = await getTargetCatalog(folder, explain);
+    if (!hasAvailableTargets(targetCatalog)) {
       targetItem.text = `Aedifex: ${explain.kind || 'project'}`;
       targetItem.tooltip = `Active Aedifex root kind for ${folder.name}`;
       targetItem.show();
@@ -81,11 +83,11 @@ async function refreshStatusBar() {
       return;
     }
     await rememberRunnableWorkspace(folder);
-    const target = await getSelectedTarget(folder, explain.defaults ? explain.defaults.target : null);
+    const target = await getSelectedTarget(folder, explain.defaults ? explain.defaults.target : null, false, targetCatalog);
     const profile = await getSelectedProfile(folder, explain.defaults ? explain.defaults.profile : null);
     await ensureLaunchConfiguration(folder, explain, target, profile);
     await ensureTasksConfiguration(folder, target, profile);
-    targetItem.text = `Aedifex: ${target}`;
+    targetItem.text = `Aedifex: ${target.label}`;
     targetItem.tooltip = `Active Aedifex target for ${folder.name}`;
     profileItem.text = `Aedifex: ${profile}`;
     profileItem.tooltip = `Active Aedifex profile for ${folder.name}`;
@@ -109,21 +111,13 @@ async function selectTarget() {
     return;
   }
 
-  const payload = await getTargets(folder);
-  if (!hasSelectableTargets(payload)) {
-    vscode.window.showInformationMessage(nonRunnableSelectionMessage(payload));
+  const explain = await getExplain(folder);
+  const targetCatalog = await getTargetCatalog(folder, explain);
+  if (!hasAvailableTargets(targetCatalog)) {
+    vscode.window.showInformationMessage(nonRunnableSelectionMessage(explain));
     return;
   }
-  const items = (payload.targets || [])
-    .filter((target) => !target.hidden)
-    .map((target) => ({
-      label: target.name,
-      description: buildTargetDescription(target),
-      detail: target.buildSupported
-        ? (target.runSupported ? 'build + run available' : 'build available')
-        : (target.reason || 'not currently available'),
-      target
-    }));
+  const items = buildTargetQuickPickItems(targetCatalog.targets);
 
   const choice = await vscode.window.showQuickPick(items, {
     title: 'Select Aedifex Target',
@@ -134,7 +128,7 @@ async function selectTarget() {
     return;
   }
 
-  await extensionContext.workspaceState.update(targetStateKey(folder), choice.label);
+  await extensionContext.workspaceState.update(targetStateKey(folder), serializeSelectedTarget(choice.target));
   await refreshStatusBar();
 }
 
@@ -178,7 +172,8 @@ async function runLifecycleCommand(command, forceClean = false) {
   }
 
   const explain = await getExplain(folder);
-  if (!hasSelectableTargets(explain)) {
+  const targetCatalog = await getTargetCatalog(folder, explain);
+  if (!hasAvailableTargets(targetCatalog)) {
     if (explain.kind === 'tool' && command === 'build') {
       await rebuildToolRoot(folder);
       return;
@@ -194,7 +189,7 @@ async function runLifecycleCommand(command, forceClean = false) {
     return;
   }
 
-  const target = await getSelectedTarget(folder, null, true);
+  const target = await getSelectedTarget(folder, null, true, targetCatalog);
   const profile = await getSelectedProfile(folder, null, true);
   if (command === 'clean') {
     await executeTaskAndWait(createLifecycleTask(folder, 'clean', target, profile));
@@ -219,12 +214,13 @@ async function startDebugging() {
   }
 
   const explain = await getExplain(folder);
-  if (!hasSelectableTargets(explain)) {
+  const targetCatalog = await getTargetCatalog(folder, explain);
+  if (!hasAvailableTargets(targetCatalog)) {
     vscode.window.showInformationMessage(nonRunnableMessage(explain, 'debug', await safeTaskPayload(folder)));
     return;
   }
 
-  await getSelectedTarget(folder, explain.defaults ? explain.defaults.target : null, true);
+  await getSelectedTarget(folder, explain.defaults ? explain.defaults.target : null, true, targetCatalog);
   await getSelectedProfile(folder, explain.defaults ? explain.defaults.profile : null, true);
   await vscode.debug.startDebugging(folder, {
     type: 'aedifex',
@@ -261,21 +257,21 @@ class AedifexDebugConfigurationProvider {
       return null;
     }
 
-    const target = debugConfiguration.target || await getSelectedTarget(workspaceFolder, null, true);
+    const targetCatalog = await getTargetCatalog(workspaceFolder);
+    const target = await resolveDebugTargetSelection(workspaceFolder, debugConfiguration, targetCatalog);
     const profile = debugConfiguration.profile || await getSelectedProfile(workspaceFolder, null, true);
+    const explain = await getExplain(workspaceFolder);
 
-    const plan = await execJson(workspaceFolder, ['launch-plan', target, workspaceFolder.uri.fsPath, '-profile', profile]);
-
-    if (!plan || !plan.launcher) {
+    await executeTaskAndWait(createLifecycleTask(workspaceFolder, 'build', target, profile));
+    const launcher = await resolveLauncher(workspaceFolder, target, profile, explain);
+    if (!launcher) {
       vscode.window.showErrorMessage('Aedifex did not return a launch plan.');
       return null;
     }
 
-    await executeTaskAndWait(createLifecycleTask(workspaceFolder, 'build', target, profile));
-
-    const resolved = toDebugConfiguration(workspaceFolder, target, profile, plan.launcher, profile === 'debug');
+    const resolved = toDebugConfiguration(workspaceFolder, target, profile, launcher, profile === 'debug');
     if (!resolved) {
-      await launchWithoutDebugging(workspaceFolder, target, profile, plan.launcher);
+      await launchWithoutDebugging(workspaceFolder, target, profile, launcher);
       return null;
     }
     return resolved;
@@ -295,7 +291,8 @@ class AedifexTaskProvider {
 
     const definition = task.definition || {};
     const command = definition.command || 'build';
-    const target = definition.target || await getSelectedTarget(folder, null);
+    const targetCatalog = await getTargetCatalog(folder);
+    const target = await resolveTaskTargetSelection(folder, definition, targetCatalog);
     const profile = definition.profile || await getSelectedProfile(folder, null);
     const cleanBuild = command === 'build' ? definition.clean === true : false;
     return createLifecycleTask(folder, command, target, profile, cleanBuild);
@@ -339,7 +336,8 @@ function toDebugConfiguration(folder, target, profile, launcher, allowWarnings =
 }
 
 function nonDebuggableTargetMessage(target, profile) {
-  return `Aedifex target '${target}' can run for profile '${profile}', but VS Code debugging is not implemented for this target yet. Aedifex will build and run it without a debugger.`;
+  const label = target && target.label ? target.label : target;
+  return `Aedifex target '${label}' can run for profile '${profile}', but VS Code debugging is not implemented for this target yet. Aedifex will build and run it without a debugger.`;
 }
 
 async function launchWithoutDebugging(folder, target, profile, launcher) {
@@ -362,7 +360,8 @@ async function launchWithoutDebugging(folder, target, profile, launcher) {
     return;
   }
 
-  vscode.window.showWarningMessage(`Aedifex target '${target}' does not currently expose a runnable launch surface for profile '${profile}'.`);
+  const label = target && target.label ? target.label : target;
+  vscode.window.showWarningMessage(`Aedifex target '${label}' does not currently expose a runnable launch surface for profile '${profile}'.`);
 }
 
 function buildTerminalCommand(launcher) {
@@ -373,8 +372,8 @@ function buildTerminalCommand(launcher) {
 function createLauncherTask(folder, target, launcher) {
   const definition = {
     type: 'aedifex-launcher',
-    target,
-    command: launcher.command || target
+    target: target && target.label ? target.label : target,
+    command: launcher.command || (target && target.label ? target.label : target)
   };
   const args = Array.isArray(launcher.args) ? launcher.args.slice() : [];
   const execution = new vscode.ProcessExecution(launcher.command, args, {
@@ -447,41 +446,63 @@ async function getTasks(folder) {
   return execJson(folder, ['tasks', folder.uri.fsPath]);
 }
 
-async function getSelectedTarget(folder, fallback, promptIfMissing = false) {
+async function resolveLauncher(folder, target, profile, explain) {
+  const pluginLauncher = resolvePluginLauncher(folder, target, profile, explain);
+  if (pluginLauncher) {
+    return pluginLauncher;
+  }
+
+  const plan = await execJson(folder, buildLaunchPlanArgs(target, folder.uri.fsPath, profile));
+  return plan && plan.launcher ? plan.launcher : null;
+}
+
+async function getTargetCatalog(folder, explainOverride) {
+  const payload = explainOverride && Array.isArray(explainOverride.targets)
+    ? explainOverride
+    : await getTargets(folder);
+  const nativeTargets = getSelectableTargets(payload).map((target) => createNativeTargetEntry(target));
+  const pluginTargets = loadWorkspacePluginTargets(folder, payload);
+  return {
+    payload,
+    targets: pluginTargets.length > 0 ? pluginTargets : nativeTargets,
+    pluginTargets
+  };
+}
+
+async function getSelectedTarget(folder, fallback, promptIfMissing = false, catalogOverride) {
   const key = targetStateKey(folder);
-  const payload = await getTargets(folder);
-  const available = getSelectableTargets(payload);
-  const availableNames = new Set(available.map((item) => item.name));
-  let target = extensionContext.workspaceState.get(key);
-  if (target && !availableNames.has(target)) {
+  const catalog = catalogOverride || await getTargetCatalog(folder);
+  const available = Array.isArray(catalog.targets) ? catalog.targets : [];
+  let target = normalizeStoredTargetSelection(extensionContext.workspaceState.get(key), available);
+  if (target && !available.some((item) => item.id === target.id)) {
     target = null;
   }
-  if (!target && fallback && availableNames.has(fallback)) {
-    target = fallback;
+  if (!target && fallback) {
+    target = findTargetByFallback(available, fallback);
   }
   if (!target) {
-    const explain = await getExplain(folder);
+    const explain = catalog.payload && catalog.payload.defaults ? catalog.payload : await getExplain(folder);
     const defaultTarget = explain.defaults ? explain.defaults.target : null;
-    if (defaultTarget && availableNames.has(defaultTarget)) {
-      target = defaultTarget;
+    if (defaultTarget) {
+      target = findTargetByFallback(available, defaultTarget);
     }
   }
   if (!target) {
     if (promptIfMissing && available.length > 1) {
-      const selected = await promptForTarget(folder, payload);
+      const selected = await promptForTarget(folder, catalog);
       if (selected) {
         target = selected;
       }
     }
     if (!target) {
       const first = available[0];
-      target = first ? first.name : null;
+      target = first || null;
     }
   }
   if (!target) {
     throw new Error('This Aedifex root does not currently declare a runnable target.');
   }
-  await extensionContext.workspaceState.update(key, target);
+  await extensionContext.workspaceState.update(key, serializeSelectedTarget(target));
   return target;
 }
 
@@ -518,17 +539,12 @@ function getSelectableTargets(payload) {
 }
 
 async function promptForTarget(folder, payload) {
-  const available = getSelectableTargets(payload);
+  const available = Array.isArray(payload && payload.targets) ? payload.targets : [];
   if (available.length === 0) {
     return null;
   }
 
-  const items = available.map((target) => ({
-    label: target.name,
-    description: buildTargetDescription(target),
-    detail: target.runSupported ? 'build + run available' : 'build available',
-    target
-  }));
+  const items = buildTargetQuickPickItems(available);
 
   const choice = await vscode.window.showQuickPick(items, {
     title: 'Select Aedifex Target',
@@ -539,8 +555,185 @@ async function promptForTarget(folder, payload) {
     return null;
   }
 
-  await extensionContext.workspaceState.update(targetStateKey(folder), choice.label);
-  return choice.label;
+  await extensionContext.workspaceState.update(targetStateKey(folder), serializeSelectedTarget(choice.target));
+  return choice.target;
+}
+
+function buildTargetQuickPickItems(targets) {
+  return (Array.isArray(targets) ? targets : []).map((target) => ({
+    label: target.label,
+    description: buildTargetDescription(target),
+    detail: target.buildSupported
+      ? (target.runSupported ? 'build + run available' : 'build available')
+      : (target.reason || 'not currently available'),
+    target
+  }));
+}
+
+function createNativeTargetEntry(target) {
+  return {
+    id: `aedifex:${target.name}:${target.platform || ''}:${target.architecture || ''}`,
+    label: target.name,
+    target: target.name,
+    platform: target.platform || null,
+    architecture: target.architecture || null,
+    backend: target.backend || null,
+    source: 'aedifex',
+    buildSupported: target.buildSupported !== false,
+    runSupported: target.runSupported !== false,
+    hidden: target.hidden === true,
+    reason: target.reason || null
+  };
+}
+
+function loadWorkspacePluginTargets(folder, payload) {
+  const pluginDir = path.join(folder.uri.fsPath, '.aedifex', 'plugins');
+  if (!fs.existsSync(pluginDir)) {
+    return [];
+  }
+
+  const entries = [];
+  let files = [];
+  try {
+    files = fs.readdirSync(pluginDir)
+      .filter((name) => name.toLowerCase().endsWith('.json'))
+      .map((name) => path.join(pluginDir, name));
+  } catch (error) {
+    outputChannel.appendLine(`[plugins] failed to enumerate ${pluginDir}: ${String(error)}`);
+    return [];
+  }
+
+  for (const filePath of files) {
+    try {
+      const raw = parseJsonLike(fs.readFileSync(filePath, 'utf8'));
+      const pluginName = String(raw && (raw.name || raw.plugin || path.basename(filePath, '.json')) || '').trim();
+      const targets = raw && Array.isArray(raw.targets) ? raw.targets : [];
+      for (let index = 0; index < targets.length; index++) {
+        const normalized = createPluginTargetEntry(targets[index], pluginName, index, payload, filePath);
+        if (normalized) {
+          entries.push(normalized);
+        }
+      }
+    } catch (error) {
+      outputChannel.appendLine(`[plugins] failed to read ${filePath}: ${String(error)}`);
+    }
+  }
+
+  return entries.filter((entry) => entry && entry.hidden !== true);
+}
+
+function createPluginTargetEntry(target, pluginName, index, payload, filePath) {
+  if (!target || typeof target !== 'object') {
+    return null;
+  }
+
+  const label = String(target.label || target.name || '').trim();
+  const commandTarget = String(target.target || '').trim();
+  if (!label || !commandTarget) {
+    outputChannel.appendLine(`[plugins] ignored invalid target entry in ${filePath}`);
+    return null;
+  }
+
+  const native = findMatchingNativeTarget(payload, commandTarget, target.platform, target.architecture);
+  return {
+    id: `plugin:${pluginName || 'plugin'}:${label}:${index}`,
+    label,
+    target: commandTarget,
+    platform: target.platform || (native ? native.platform || null : null),
+    architecture: target.architecture || (native ? native.architecture || null : null),
+    backend: target.backend || (native ? native.backend || null : null),
+    source: 'plugin',
+    pluginName: pluginName || 'plugin',
+    buildSupported: target.buildSupported != null ? target.buildSupported === true : (native ? native.buildSupported !== false : true),
+      runSupported: target.runSupported != null ? target.runSupported === true : (native ? native.runSupported !== false : true),
+      hidden: target.hidden === true,
+      reason: target.reason || (native ? native.reason || null : null),
+      pluginOptions: target.options && typeof target.options === 'object' ? target.options : null
+    };
+  }
+
+function findMatchingNativeTarget(payload, targetName, platform, architecture) {
+  const available = getSelectableTargets(payload);
+  return available.find((item) =>
+    item
+    && item.name === targetName
+    && (platform == null || platform === '' || item.platform === platform)
+    && (architecture == null || architecture === '' || item.architecture === architecture)
+  ) || available.find((item) => item && item.name === targetName) || null;
+}
+
+function normalizeStoredTargetSelection(value, available) {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    return findTargetByFallback(available, value);
+  }
+  if (typeof value !== 'object') {
+    return null;
+  }
+  return available.find((item) =>
+    item.id === value.id
+    || (value.label && item.label === value.label && item.source === value.source)
+    || (value.target && item.target === value.target && item.platform === (value.platform || null) && item.architecture === (value.architecture || null))
+  ) || null;
+}
+
+function serializeSelectedTarget(target) {
+  return {
+    id: target.id,
+    label: target.label,
+    target: target.target,
+    platform: target.platform || null,
+    architecture: target.architecture || null,
+    source: target.source || 'aedifex',
+    pluginName: target.pluginName || null
+  };
+}
+
+function findTargetByFallback(available, fallback) {
+  const text = String(fallback || '').trim();
+  if (!text) {
+    return null;
+  }
+  return available.find((item) => item.label === text)
+    || available.find((item) => item.target === text)
+    || available.find((item) => item.id === text)
+    || null;
+}
+
+async function resolveDebugTargetSelection(folder, debugConfiguration, catalog) {
+  const explicit = resolveConfiguredTargetSelection(catalog.targets, debugConfiguration);
+  if (explicit) {
+    return explicit;
+  }
+  return await getSelectedTarget(folder, null, true, catalog);
+}
+
+async function resolveTaskTargetSelection(folder, definition, catalog) {
+  const explicit = resolveConfiguredTargetSelection(catalog.targets, definition);
+  if (explicit) {
+    return explicit;
+  }
+  return await getSelectedTarget(folder, null, false, catalog);
+}
+
+function resolveConfiguredTargetSelection(available, value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const label = value.targetLabel || null;
+  const target = value.target || null;
+  const platform = value.platform || null;
+  const architecture = value.architecture || null;
+  const source = value.targetSource || value.source || null;
+  return (Array.isArray(available) ? available : []).find((item) =>
+    (label && item.label === label)
+    || (target && item.target === target
+      && (platform == null || item.platform === platform)
+      && (architecture == null || item.architecture === architecture)
+      && (source == null || item.source === source))
+  ) || null;
 }
 
 async function promptForProfile(folder) {
@@ -903,6 +1096,11 @@ function hasSelectableTargets(payload) {
   return targets.some((item) => item && item.declared && !item.hidden);
 }
 
+function hasAvailableTargets(catalog) {
+  const targets = catalog && Array.isArray(catalog.targets) ? catalog.targets : [];
+  return targets.length > 0;
+}
+
 function hasRunnableTargets(payload) {
   const targets = payload && Array.isArray(payload.targets) ? payload.targets : [];
   return targets.some((item) => item && item.buildSupported && !item.hidden);
@@ -960,7 +1158,7 @@ function capitalize(value) {
 }
 
 async function ensureLaunchConfiguration(folder, explain, target, profile) {
-  if (!folder || !hasRunnableTargets(explain)) {
+  if (!folder || !target) {
     return;
   }
 
@@ -970,7 +1168,11 @@ async function ensureLaunchConfiguration(folder, explain, target, profile) {
     type: 'aedifex',
     request: 'launch',
     name: 'Aedifex',
-    target,
+    target: target.target,
+    targetLabel: target.label,
+    targetSource: target.source,
+    platform: target.platform || undefined,
+    architecture: target.architecture || undefined,
     profile
   };
 
@@ -1016,7 +1218,11 @@ async function ensureTasksConfiguration(folder, target, profile) {
     label: 'Aedifex',
     type: 'aedifex',
     command: 'build',
-    target,
+    target: target.target,
+    targetLabel: target.label,
+    targetSource: target.source,
+    platform: target.platform || undefined,
+    architecture: target.architecture || undefined,
     profile,
     clean: false,
     problemMatcher: []
@@ -1066,7 +1272,9 @@ async function ensureTasksConfiguration(folder, target, profile) {
 
 function buildTargetDescription(target) {
   const parts = [];
-  if (target.backend) {
+  if (target.source === 'plugin' && target.pluginName) {
+    parts.push(`${target.pluginName} plugin`);
+  } else if (target.backend) {
     parts.push(`${target.backend} backend`);
   }
   if (target.platform) {
@@ -1079,7 +1287,11 @@ function buildTargetDescription(target) {
 }
 
 function buildLifecycleArgs(command, target, projectPath, profile, cleanBuild = false) {
-  const args = [command, target, projectPath, '-profile', profile];
+  const args = [command, target.target, projectPath, '-profile', profile];
+  appendPlatformArgs(args, target.platform);
+  if (target.architecture) {
+    args.push(`-arch=${target.architecture}`);
+  }
   if (command === 'build' && cleanBuild) {
     args.push('-clean');
   }
@@ -1089,6 +1301,105 @@ function buildLifecycleArgs(command, target, projectPath, profile, cleanBuild = 
 function createLifecycleTask(folder, command, target, profile, cleanBuild = false) {
   const args = buildLifecycleArgs(command, target, folder.uri.fsPath, profile, cleanBuild);
   return createCliTask(folder, args);
+}
+
+function buildLaunchPlanArgs(target, projectPath, profile) {
+  const args = ['launch-plan', target.target, projectPath, '-profile', profile];
+  appendPlatformArgs(args, target.platform);
+  if (target.architecture) {
+    args.push(`-arch=${target.architecture}`);
+  }
+  return args;
+}
+
+function resolvePluginLauncher(folder, target, profile, explain) {
+  if (!isLimeBackedPluginTarget(target)) {
+    return null;
+  }
+
+  const project = explain && explain.project ? explain.project : null;
+  const app = project && project.app ? project.app : null;
+  const outputRoot = resolveProjectOutputRoot(folder, app && app.path ? app.path : 'bin');
+  const fileBase = String(app && app.file ? app.file : path.basename(folder.uri.fsPath)).trim();
+  const platform = String(target.platform || '').trim().toLowerCase();
+  const binDir = path.join(outputRoot, platform || 'bin', 'bin');
+
+  switch (platform) {
+    case 'windows':
+      return {
+        kind: 'native',
+        debugger: 'cppvsdbg',
+        command: path.join(binDir, `${fileBase}.exe`),
+        cwd: binDir,
+        args: []
+      };
+    case 'linux':
+    case 'mac':
+      return {
+        kind: 'native',
+        debugger: 'cppdbg',
+        command: path.join(binDir, fileBase),
+        cwd: binDir,
+        args: []
+      };
+    case 'node':
+    case 'nodejs':
+      return {
+        kind: 'terminal',
+        command: 'node',
+        cwd: binDir,
+        args: [path.join(binDir, `${fileBase}.js`)]
+      };
+    case 'html5':
+      return {
+        kind: 'browser',
+        file: path.join(binDir, 'index.html')
+      };
+    default:
+      return null;
+  }
+}
+
+function isLimeBackedPluginTarget(target) {
+  if (!target || target.source !== 'plugin') {
+    return false;
+  }
+  const backend = String(target.backend || '').trim().toLowerCase();
+  const pluginName = String(target.pluginName || '').trim().toLowerCase();
+  return backend === 'lime' || backend === 'graphaxe' || pluginName === 'lime' || pluginName === 'graphaxe';
+}
+
+function resolveProjectOutputRoot(folder, configuredPath) {
+  const value = String(configuredPath || 'bin').trim();
+  if (!value) {
+    return path.join(folder.uri.fsPath, 'bin');
+  }
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+  return path.join(folder.uri.fsPath, value);
+}
+
+function appendPlatformArgs(args, platform) {
+  const normalized = String(platform || '').trim().toLowerCase();
+  if (!normalized) {
+    return;
+  }
+
+  switch (normalized) {
+    case 'android':
+    case 'ios':
+    case 'html5':
+      args.push(`-${normalized}`);
+      return;
+    case 'node':
+    case 'nodejs':
+      args.push('-node');
+      return;
+    default:
+      args.push('-platform', normalized);
+      return;
+  }
 }
 
 function executeTaskAndWait(task) {

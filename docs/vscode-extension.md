@@ -7,6 +7,10 @@ Main files:
 - `tools/vscode-extension/package.json`
 - `tools/vscode-extension/extension.js`
 
+Local plugin surface:
+
+- workspace plugin manifests under `.aedifex/plugins/*.json`
+
 ## What It Does
 
 - activates when a workspace contains `Aedifex.hx`
@@ -18,6 +22,7 @@ Main files:
 - provides `Aedifex: Debug`
 - provides one `Aedifex` launch/debug identity
 - uses `launch-plan -json` to drive launch/debug resolution
+- prefers workspace plugin target manifests when present so plugins can provide custom picker entries such as `html5` or `windows`
 
 For roots with no runnable target, the extension still activates, but it does not invent a fake app flow.
 
@@ -61,6 +66,43 @@ Terminal-style launchers stay in VS Code's integrated terminal flow when appropr
 - `aedifex.cliPath`
 - `aedifex.pluginsPath`
 - `aedifex.theme`
+
+## Workspace Plugin Manifests
+
+The VS Code extension can be extended by local Aedifex plugins without publishing a separate VS Code extension.
+
+If a workspace contains `.aedifex/plugins/*.json`, the extension reads any `targets` declared there and uses them for the target picker, build/run/debug flows, and generated `.vscode/launch.json` and `.vscode/tasks.json`.
+
+Minimal example:
+
+```json
+{
+  "name": "lime",
+  "targets": [
+    {
+      "name": "html5",
+      "target": "js",
+      "platform": "html5",
+      "backend": "lime"
+    },
+    {
+      "name": "windows",
+      "target": "cpp",
+      "platform": "windows",
+      "backend": "lime"
+    }
+  ]
+}
+```
+
+Supported target fields:
+
+- `name` or `label`: picker label shown in VS Code
+- `target`: underlying Aedifex target token such as `js` or `cpp`
+- `platform`: optional platform qualifier such as `html5`, `windows`, or `nodejs`
+- `architecture`: optional architecture qualifier
+- `backend`: optional description label
+- `buildSupported`, `runSupported`, `hidden`, `reason`: optional UI metadata
 
 ## Local Testing
 

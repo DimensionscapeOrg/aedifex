@@ -34,6 +34,8 @@ import sys.io.File;
 class Main {
 	public static var plugins:PluginManager;
 	private static inline final IMPLICIT_TOOL_HAXELIB = "aedifex";
+	private static inline final LIME_EXTENSION_CLASS = "aedifex.lime.LimeExtension";
+	private static inline final GRAPHAXE_EXTENSION_CLASS = "aedifex.graphaxe.GraphaxeExtension";
 
 	private static var currentTheme:String;
 	private static var quiet:Bool = false;
@@ -503,6 +505,12 @@ Most people should use:
 		if (target == null) {
 			throw "clean requires a target, or a project with a default target.";
 		}
+		if (tryRunGraphaxeDelegatedLifecycle("clean", project, target, options.platform, options.architecture, options.profile, projectPath, false)
+			|| tryRunLimeDelegatedLifecycle("clean", project, target, options.platform, options.architecture, options.profile, projectPath, false)) {
+			var delegatedContext = createContext(projectPath, project, target, options.platform, options.architecture, options.profile);
+			Sys.println("Clean complete: " + delegatedContext.outDir);
+			return;
+		}
 
 		var cleanedPath = Builder.clean(project, target, options.platform, options.architecture, options.profile, projectPath);
 		Sys.println("Clean complete: " + cleanedPath);
@@ -752,6 +760,11 @@ Most people should use:
 		var projectPath = options.projectPath != null ? resolveUserPath(options.projectPath) : invocationCwd;
 		var project = Loader.loadProject(projectPath);
 		ensureTargetReady(project, target, options.platform, options.ignoreSetup);
+		if (tryRunGraphaxeDelegatedLifecycle("build", project, target, options.platform, options.architecture, options.profile, projectPath, options.cleanBuild)
+			|| tryRunLimeDelegatedLifecycle("build", project, target, options.platform, options.architecture, options.profile, projectPath, options.cleanBuild)) {
+			Sys.println("Build complete.");
+			return;
+		}
 		if (options.cleanBuild) {
 			runRebuildLifecycle(project, target, options.platform, options.architecture, options.profile, projectPath, options.extraDefs, options.extraLibs);
 		} else {
@@ -768,6 +781,10 @@ Most people should use:
 		var projectPath = options.projectPath != null ? resolveUserPath(options.projectPath) : invocationCwd;
 		var project = Loader.loadProject(projectPath);
 		ensureTargetReady(project, target, options.platform, options.ignoreSetup);
+		if (tryRunGraphaxeDelegatedLifecycle("run", project, target, options.platform, options.architecture, options.profile, projectPath, false)
+			|| tryRunLimeDelegatedLifecycle("run", project, target, options.platform, options.architecture, options.profile, projectPath, false)) {
+			return;
+		}
 		var ctx = createContext(projectPath, project, target, options.platform, options.architecture, options.profile);
 		plugins.preRun(ctx);
 		Runner.run(project, target, options.platform, options.architecture, options.profile, projectPath);
@@ -781,6 +798,10 @@ Most people should use:
 		var projectPath = options.projectPath != null ? resolveUserPath(options.projectPath) : invocationCwd;
 		var project = Loader.loadProject(projectPath);
 		ensureTargetReady(project, target, options.platform, options.ignoreSetup);
+		if (tryRunGraphaxeDelegatedLifecycle("test", project, target, options.platform, options.architecture, options.profile, projectPath, options.cleanBuild)
+			|| tryRunLimeDelegatedLifecycle("test", project, target, options.platform, options.architecture, options.profile, projectPath, options.cleanBuild)) {
+			return;
+		}
 
 		var buildCtx = createContext(projectPath, project, target, options.platform, options.architecture, options.profile);
 		plugins.preBuild(buildCtx);
@@ -900,6 +921,12 @@ Most people should use:
 				case "-profile", "--profile":
 					if (i + 1 >= args.length) throw "-profile requires PROFILE";
 					profile = Profile.normalize(args[++i]);
+				case "-platform", "--platform":
+					if (i + 1 >= args.length) throw "-platform requires PLATFORM";
+					platform = ExecutionPlanner.normalizePlatform(args[++i]);
+				case "-arch", "--arch":
+					if (i + 1 >= args.length) throw "-arch requires ARCH";
+					architecture = ExecutionPlanner.normalizeArchitecture(args[++i]);
 				case "-android", "-ios", "-html5", "-node":
 					platform = ExecutionPlanner.normalizePlatform(a);
 				case "-x86", "-x64", "-arm64", "-armv7":
@@ -1181,18 +1208,266 @@ Most people should use:
 
 	private static function runNamedTask(task:TaskSpec, projectRoot:String):Void {
 		var previous = Sys.getCwd();
+		var previousProjectRootEnv = Sys.getEnv("AEDIFEX_PROJECT_ROOT");
 		var failure:Dynamic = null;
 		try {
-			Sys.setCwd(task.cwd != null && task.cwd.length > 0 ? Path.join([projectRoot, task.cwd]) : projectRoot);
-			var code = Sys.command(task.command, task.args != null ? task.args : []);
+			Sys.putEnv("AEDIFEX_PROJECT_ROOT", projectRoot);
+			Sys.setCwd(resolveTaskCwd(task.cwd, projectRoot));
+			var code = Sys.command(task.command, resolveTaskArgs(task.args, projectRoot));
 			if (code != 0) {
 				failure = 'Task `${task.name}` failed with exit ' + code;
 			}
 		} catch (e:Dynamic) {
 			failure = e;
 		}
+		Sys.putEnv("AEDIFEX_PROJECT_ROOT", previousProjectRootEnv != null ? previousProjectRootEnv : "");
 		Sys.setCwd(previous);
 		if (failure != null) throw failure;
+	}
+
+	private static function resolveTaskCwd(value:String, projectRoot:String):String {
+		if (value == null || value.length == 0) {
+			return projectRoot;
+		}
+		var expanded = expandTaskValue(value, projectRoot);
+		return Path.isAbsolute(expanded) ? expanded : Path.join([projectRoot, expanded]);
+	}
+
+	private static function resolveTaskArgs(args:Array<String>, projectRoot:String):Array<String> {
+		if (args == null) {
+			return [];
+		}
+		return [for (arg in args) expandTaskValue(arg, projectRoot)];
+	}
+
+	private static function expandTaskValue(value:String, projectRoot:String):String {
+		if (value == null) {
+			return null;
+		}
+		return StringTools.replace(value, "$" + "{projectRoot}", projectRoot);
+	}
+
+	private static function tryRunLimeDelegatedLifecycle(
+		action:String,
+		project:ProjectSpec,
+		target:BuildTarget,
+		platform:BuildPlatform,
+		architecture:BuildArchitecture,
+		profile:Profile,
+		projectPath:String,
+		cleanFirst:Bool
+	):Bool {
+		var extension = findExtension(project, LIME_EXTENSION_CLASS);
+		if (extension == null) {
+			return false;
+		}
+
+		var taskName = resolveLimeTaskName(project, extension, action, target, platform, profile);
+		if (taskName == null) {
+			return false;
+		}
+
+		if (cleanFirst) {
+			var cleanTaskName = resolveLimeTaskName(project, extension, "clean", target, platform, profile);
+			if (cleanTaskName != null) {
+				var cleanTask = findTask(project.tasks, cleanTaskName);
+				if (cleanTask != null) {
+					runNamedTask(cleanTask, projectPath);
+				}
+			}
+		}
+
+		var task = findTask(project.tasks, taskName);
+		if (task == null) {
+			if (action == "run") {
+				var fallbackTask = findTask(project.tasks, resolveLimeTaskName(project, extension, "test", target, platform, profile));
+				if (fallbackTask != null) {
+					var runContext = createContext(projectPath, project, target, platform, architecture, profile);
+					plugins.preRun(runContext);
+					runNamedTask(fallbackTask, projectPath);
+					plugins.postRun(runContext);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		return runDelegatedTaskLifecycle(action, task, project, target, platform, architecture, profile, projectPath);
+	}
+
+	private static function tryRunGraphaxeDelegatedLifecycle(
+		action:String,
+		project:ProjectSpec,
+		target:BuildTarget,
+		platform:BuildPlatform,
+		architecture:BuildArchitecture,
+		profile:Profile,
+		projectPath:String,
+		cleanFirst:Bool
+	):Bool {
+		var extension = findExtension(project, GRAPHAXE_EXTENSION_CLASS);
+		if (extension == null) {
+			return false;
+		}
+
+		var taskName = resolveGraphaxeTaskName(project, extension, action, target, platform, profile);
+		if (taskName == null) {
+			return false;
+		}
+
+		if (cleanFirst) {
+			var cleanTaskName = resolveGraphaxeTaskName(project, extension, "clean", target, platform, profile);
+			if (cleanTaskName != null) {
+				var cleanTask = findTask(project.tasks, cleanTaskName);
+				if (cleanTask != null) {
+					runNamedTask(cleanTask, projectPath);
+				}
+			}
+		}
+
+		var task = findTask(project.tasks, taskName);
+		if (task == null) {
+			return false;
+		}
+
+		return runDelegatedTaskLifecycle(action, task, project, target, platform, architecture, profile, projectPath);
+	}
+
+	private static function runDelegatedTaskLifecycle(
+		action:String,
+		task:TaskSpec,
+		project:ProjectSpec,
+		target:BuildTarget,
+		platform:BuildPlatform,
+		architecture:BuildArchitecture,
+		profile:Profile,
+		projectPath:String
+	):Bool {
+		var context = createContext(projectPath, project, target, platform, architecture, profile);
+		switch (action) {
+			case "build":
+				if (profile == Profile.FINAL) {
+					plugins.preFinalize(context);
+				}
+				plugins.preBuild(context);
+				runNamedTask(task, projectPath);
+				plugins.postBuild(context);
+				if (profile == Profile.FINAL) {
+					plugins.postFinalize(context);
+				}
+			case "test":
+				plugins.preBuild(context);
+				runNamedTask(task, projectPath);
+				plugins.postBuild(context);
+			case "run":
+				plugins.preRun(context);
+				runNamedTask(task, projectPath);
+				plugins.postRun(context);
+			case "clean":
+				runNamedTask(task, projectPath);
+			default:
+				return false;
+		}
+		return true;
+	}
+
+	private static function resolveLimeTaskName(
+		project:ProjectSpec,
+		extension:ExtensionSpec,
+		action:String,
+		target:BuildTarget,
+		platform:BuildPlatform,
+		profile:Profile
+	):String {
+		var prefix = "lime";
+		if (extension != null && extension.options != null && Reflect.hasField(extension.options, "taskPrefix")) {
+			var rawPrefix = Reflect.field(extension.options, "taskPrefix");
+			if (rawPrefix != null && StringTools.trim(Std.string(rawPrefix)).length > 0) {
+				prefix = StringTools.trim(Std.string(rawPrefix));
+			}
+		}
+
+		var limeTarget = resolveLimeTaskTarget(project, target, platform);
+		if (limeTarget == null) {
+			return null;
+		}
+
+		return switch (action) {
+			case "build", "test", "run":
+				prefix + "-" + action + "-" + limeTarget + "-" + Std.string(profile);
+			case "clean", "update", "display":
+				prefix + "-" + action + "-" + limeTarget;
+			default:
+				null;
+		};
+	}
+
+	private static function resolveLimeTaskTarget(project:ProjectSpec, target:BuildTarget, platform:BuildPlatform):String {
+		var effectivePlatform = platform != null ? platform : ExecutionPlanner.defaultPlatform(project, target);
+		return switch (target) {
+			case BuildTarget.CPP:
+				effectivePlatform != null ? Std.string(effectivePlatform) : "windows";
+			case BuildTarget.JS:
+				effectivePlatform == BuildPlatform.NODE ? "nodejs" : "html5";
+			case BuildTarget.HL:
+				"hl";
+			case BuildTarget.NEKO:
+				"neko";
+			default:
+				null;
+		};
+	}
+
+	private static function resolveGraphaxeTaskName(
+		project:ProjectSpec,
+		extension:ExtensionSpec,
+		action:String,
+		target:BuildTarget,
+		platform:BuildPlatform,
+		profile:Profile
+	):String {
+		var prefix = "graphaxe";
+		if (extension != null && extension.options != null && Reflect.hasField(extension.options, "taskPrefix")) {
+			var rawPrefix = Reflect.field(extension.options, "taskPrefix");
+			if (rawPrefix != null && StringTools.trim(Std.string(rawPrefix)).length > 0) {
+				prefix = StringTools.trim(Std.string(rawPrefix));
+			}
+		}
+
+		var graphaxeTarget = resolveGraphaxeTaskTarget(project, target, platform);
+		if (graphaxeTarget == null) {
+			return null;
+		}
+
+		return switch (action) {
+			case "build", "test", "run":
+				prefix + "-" + action + "-" + graphaxeTarget + "-" + Std.string(profile);
+			case "clean", "update", "display":
+				prefix + "-" + action + "-" + graphaxeTarget;
+			default:
+				null;
+		};
+	}
+
+	private static function resolveGraphaxeTaskTarget(project:ProjectSpec, target:BuildTarget, platform:BuildPlatform):String {
+		var effectivePlatform = platform != null ? platform : ExecutionPlanner.defaultPlatform(project, target);
+		return switch (target) {
+			case BuildTarget.CPP:
+				effectivePlatform != null ? Std.string(effectivePlatform) : "windows";
+			case BuildTarget.JS:
+				effectivePlatform == BuildPlatform.NODE ? "nodejs" : "html5";
+			default:
+				null;
+		};
+	}
+
+	private static function findExtension(project:ProjectSpec, name:String):ExtensionSpec {
+		for (extension in (project != null && project.extensions != null ? project.extensions : [])) {
+			if (extension != null && extension.name == name) {
+				return extension;
+			}
+		}
+		return null;
 	}
 
 	public static function buildHaxelibJson(project:ProjectSpec, ?baseTemplate:Dynamic):String {

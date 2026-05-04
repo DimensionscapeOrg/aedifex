@@ -1,6 +1,7 @@
 package aedifex.build._internal;
 
 import aedifex.build.ProjectSpec;
+import haxe.Json;
 import aedifex.build._internal.ProjectProviderDiscovery.DiscoveredProjectProvider;
 import aedifex.build._internal.ProjectProviderDiscovery.ProjectProviderKind;
 import haxe.Unserializer;
@@ -23,6 +24,10 @@ class ProjectExtractor {
 		for (classPath in collectProjectClassPaths(cwd, provider, tempDirectory)) {
 			args.push("-cp");
 			args.push(classPath);
+		}
+		for (library in collectProjectLibraries(cwd)) {
+			args.push("-lib");
+			args.push(library);
 		}
 		args.push("-cp");
 		args.push(Path.join([ToolEnvironment.getAedifexRoot(), "src"]));
@@ -70,6 +75,29 @@ class ProjectExtractor {
 			appendLikelySourceRoots(Path.normalize(cwd), results, seen);
 		}
 		addClassPath(results, seen, tempDirectory);
+		return results;
+	}
+
+	private static function collectProjectLibraries(cwd:String):Array<String> {
+		var results:Array<String> = [];
+		var haxelibPath = Path.join([cwd, "haxelib.json"]);
+		if (!FileSystem.exists(haxelibPath) || FileSystem.isDirectory(haxelibPath)) {
+			return results;
+		}
+
+		try {
+			var data:Dynamic = Json.parse(File.getContent(haxelibPath));
+			var dependencies:Dynamic = Reflect.field(data, "dependencies");
+			if (dependencies == null) {
+				return results;
+			}
+
+			for (field in Reflect.fields(dependencies)) {
+				if (field == null || StringTools.trim(field).length == 0) continue;
+				results.push(field);
+			}
+		} catch (_:Dynamic) {}
+
 		return results;
 	}
 

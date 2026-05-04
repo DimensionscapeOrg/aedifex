@@ -4,6 +4,7 @@ import aedifex.build.ProjectSpec;
 import aedifex.build.ProjectSpec.LibrarySpec;
 import aedifex.build._internal.ProjectResolver;
 import aedifex.config.Loader;
+import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -60,6 +61,10 @@ class DisplayTools {
 			normalizePath(supportRoot)
 		];
 		appendPair(lines, "-lib", IMPLICIT_TOOL_HAXELIB);
+		for (library in collectProjectLibraries(projectRoot)) {
+			if (isImplicitToolDependency(library)) continue;
+			appendPair(lines, "-lib", library);
+		}
 
 		for (source in project.sources) {
 			if (source == null || source.length == 0) continue;
@@ -71,6 +76,32 @@ class DisplayTools {
 		}
 
 		return lines.join("\n") + "\n";
+	}
+
+	private static function collectProjectLibraries(projectRoot:String):Array<String> {
+		var results:Array<String> = [];
+		var haxelibPath = Path.join([projectRoot, "haxelib.json"]);
+		if (!FileSystem.exists(haxelibPath) || FileSystem.isDirectory(haxelibPath)) {
+			return results;
+		}
+
+		try {
+			var data:Dynamic = Json.parse(File.getContent(haxelibPath));
+			var dependencies:Dynamic = Reflect.field(data, "dependencies");
+			if (dependencies == null) {
+				return results;
+			}
+
+			for (field in Reflect.fields(dependencies)) {
+				if (field == null) continue;
+				var normalized = StringTools.trim(field);
+				if (normalized.length == 0) continue;
+				if (results.indexOf(normalized) >= 0) continue;
+				results.push(normalized);
+			}
+		} catch (_:Dynamic) {}
+
+		return results;
 	}
 
 	private static function appendLibrary(lines:Array<String>, projectRoot:String, library:LibrarySpec):Void {
