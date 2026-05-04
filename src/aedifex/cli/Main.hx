@@ -741,7 +741,8 @@ Most people should use:
 		var options = parseExecutionOptions(args, 2, Profile.RELEASE, false);
 		var projectPath = options.projectPath != null ? resolveUserPath(options.projectPath) : invocationCwd;
 		var project = Loader.loadProject(projectPath);
-		printJson(ExecutionPlanner.buildPlan(projectPath, project, target, options.platform, options.architecture, options.profile));
+		var plan = ExecutionPlanner.buildPlan(projectPath, project, target, options.platform, options.architecture, options.profile);
+		printJson(applyDelegatedPlan(project, target, options.platform, options.architecture, options.profile, projectPath, plan));
 	}
 
 	private static function doLaunchPlan(args:Array<String>):Void {
@@ -750,7 +751,8 @@ Most people should use:
 		var options = parseExecutionOptions(args, 2, Profile.RELEASE, false);
 		var projectPath = options.projectPath != null ? resolveUserPath(options.projectPath) : invocationCwd;
 		var project = Loader.loadProject(projectPath);
-		printJson(ExecutionPlanner.launchPlan(projectPath, project, target, options.platform, options.architecture, options.profile));
+		var plan = ExecutionPlanner.launchPlan(projectPath, project, target, options.platform, options.architecture, options.profile);
+		printJson(applyDelegatedPlan(project, target, options.platform, options.architecture, options.profile, projectPath, plan));
 	}
 
 	private static function doBuild(args:Array<String>):Void {
@@ -1456,6 +1458,141 @@ Most people should use:
 				effectivePlatform != null ? Std.string(effectivePlatform) : "windows";
 			case BuildTarget.JS:
 				effectivePlatform == BuildPlatform.NODE ? "nodejs" : "html5";
+			default:
+				null;
+		};
+	}
+
+	private static function applyDelegatedPlan(
+		project:ProjectSpec,
+		target:BuildTarget,
+		platform:BuildPlatform,
+		architecture:BuildArchitecture,
+		profile:Profile,
+		projectPath:String,
+		plan:Dynamic
+	):Dynamic {
+		var delegated = buildDelegatedPlanFor(project, target, platform, architecture, profile, projectPath, plan, GRAPHAXE_EXTENSION_CLASS);
+		if (delegated != null) {
+			return delegated;
+		}
+		delegated = buildDelegatedPlanFor(project, target, platform, architecture, profile, projectPath, plan, LIME_EXTENSION_CLASS);
+		return delegated != null ? delegated : plan;
+	}
+
+	private static function buildDelegatedPlanFor(
+		project:ProjectSpec,
+		target:BuildTarget,
+		platform:BuildPlatform,
+		architecture:BuildArchitecture,
+		profile:Profile,
+		projectPath:String,
+		plan:Dynamic,
+		extensionName:String
+	):Dynamic {
+		if (findExtension(project, extensionName) == null) {
+			return null;
+		}
+
+		var delegatedTarget = extensionName == GRAPHAXE_EXTENSION_CLASS
+			? resolveGraphaxeTaskTarget(project, target, platform)
+			: resolveLimeTaskTarget(project, target, platform);
+		if (delegatedTarget == null) {
+			return null;
+		}
+
+		var outputRoot = resolveDelegatedOutputRoot(projectPath, project);
+		var outDir = Path.join([outputRoot, delegatedTarget]);
+		var binDir = Path.join([outDir, "bin"]);
+		var objDir = Path.join([outDir, "obj"]);
+		var haxeDir = Path.join([outDir, "haxe"]);
+		var fileBase = resolveDelegatedArtifactBaseName(project);
+		var launcher = buildDelegatedLauncher(delegatedTarget, binDir, fileBase);
+		if (launcher == null) {
+			return null;
+		}
+
+		var paths = {
+			outDir: outDir,
+			binDir: binDir,
+			objDir: objDir,
+			haxeDir: haxeDir,
+			artifactPath: resolveDelegatedArtifactPath(delegatedTarget, binDir, fileBase)
+		};
+		Reflect.setField(plan, "paths", paths);
+		Reflect.setField(plan, "launcher", launcher);
+		return plan;
+	}
+
+	private static function resolveDelegatedOutputRoot(projectPath:String, project:ProjectSpec):String {
+		var configured = project != null && project.app != null && project.app.path != null && StringTools.trim(project.app.path).length > 0
+			? StringTools.trim(project.app.path)
+			: "bin";
+		return Path.isAbsolute(configured) ? configured : Path.join([projectPath, configured]);
+	}
+
+	private static function resolveDelegatedArtifactBaseName(project:ProjectSpec):String {
+		if (project != null && project.app != null && project.app.file != null && StringTools.trim(project.app.file).length > 0) {
+			return StringTools.trim(project.app.file);
+		}
+		if (project != null && project.meta != null && project.meta.name != null && StringTools.trim(project.meta.name).length > 0) {
+			return StringTools.trim(project.meta.name);
+		}
+		return "Application";
+	}
+
+	private static function resolveDelegatedArtifactPath(target:String, binDir:String, fileBase:String):String {
+		var normalized = target != null ? StringTools.trim(target).toLowerCase() : "";
+		return switch (normalized) {
+			case "windows":
+				Path.join([binDir, fileBase + ".exe"]);
+			case "linux", "mac":
+				Path.join([binDir, fileBase]);
+			case "node", "nodejs":
+				Path.join([binDir, fileBase + ".js"]);
+			case "html5":
+				Path.join([binDir, "index.html"]);
+			default:
+				binDir;
+		};
+	}
+
+	private static function buildDelegatedLauncher(target:String, binDir:String, fileBase:String):Dynamic {
+		var normalized = target != null ? StringTools.trim(target).toLowerCase() : "";
+		return switch (normalized) {
+			case "windows":
+				{
+					kind: "native",
+					debugger: "cppvsdbg",
+					command: Path.join([binDir, fileBase + ".exe"]),
+					args: [],
+					cwd: binDir
+				};
+			case "linux", "mac":
+				{
+					kind: "native",
+					debugger: "cppdbg",
+					command: Path.join([binDir, fileBase]),
+					args: [],
+					cwd: binDir
+				};
+			case "node", "nodejs":
+				{
+					kind: "terminal",
+					debugger: null,
+					command: "node",
+					args: [Path.join([binDir, fileBase + ".js"])],
+					cwd: binDir
+				};
+			case "html5":
+				{
+					kind: "browser",
+					debugger: null,
+					command: null,
+					args: [],
+					cwd: binDir,
+					file: Path.join([binDir, "index.html"])
+				};
 			default:
 				null;
 		};
