@@ -182,7 +182,7 @@ class ExecutionPlanner {
 			project: resolvedProject,
 			provides: resolvedProject.provides,
 			setup: setup != null ? setup.toDynamic() : null,
-			launcher: launcherFor(target, effectivePlatform, resolvedProject, paths),
+			launcher: launcherFor(target, effectivePlatform, resolvedProject, paths, profile),
 			compiler: {
 				command: "haxe",
 				backend: Std.string(resolveBackend(target))
@@ -258,13 +258,16 @@ class ExecutionPlanner {
 		};
 	}
 
-	private static function launcherFor(target:BuildTarget, platform:BuildPlatform, project:ProjectSpec, paths:Dynamic):Dynamic {
+	private static function launcherFor(target:BuildTarget, platform:BuildPlatform, project:ProjectSpec, paths:Dynamic, profile:Profile):Dynamic {
 		return switch (resolveBackend(target)) {
 			case ResolvedBackend.CPP:
+				var debuggerName = profile == Profile.DEBUG && hasLibrary(project, "hxcpp-debug-server")
+					? "hxcpp"
+					: (SystemUtil.hostPlatform() == "windows" ? "cppvsdbg" : "cppdbg");
 				if (SystemUtil.hostPlatform() == "windows") {
 					{
 						kind: "native",
-						debugger: "cppvsdbg",
+						debugger: debuggerName,
 						command: paths.artifactPath,
 						args: [],
 						cwd: paths.binDir
@@ -272,7 +275,7 @@ class ExecutionPlanner {
 				} else {
 					{
 						kind: "native",
-						debugger: "cppdbg",
+						debugger: debuggerName,
 						command: paths.artifactPath,
 						args: [],
 						cwd: paths.binDir
@@ -338,6 +341,15 @@ class ExecutionPlanner {
 					cwd: paths.binDir
 				};
 		};
+	}
+
+	private static function hasLibrary(project:ProjectSpec, name:String):Bool {
+		for (library in (project != null && project.libraries != null ? project.libraries : [])) {
+			if (library != null && library.name == name) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static function evaluateSupport(

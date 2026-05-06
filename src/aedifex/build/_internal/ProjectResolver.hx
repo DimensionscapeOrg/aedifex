@@ -21,8 +21,11 @@ import aedifex.build.ProjectSpec.ProvidedSpec;
 import aedifex.build.ProjectSpec.TaskSpec;
 import aedifex.build.ProjectSpec.TargetSpec;
 import aedifex.build.ProjectSpec.TargetRule;
+import sys.io.Process;
 
 class ProjectResolver {
+	private static var cachedHxcppDebugServerAvailable:Null<Bool> = null;
+
 	public static function resolve(
 		project:ProjectSpec,
 		?target:BuildTarget,
@@ -55,8 +58,57 @@ class ProjectResolver {
 			applyRule(resolved, rule, activeTokens);
 		}
 
+		applyImplicitDebuggerSupport(resolved, target, profile);
 		normalizeResolvedProject(resolved);
 		return resolved;
+	}
+
+	private static function applyImplicitDebuggerSupport(project:ProjectSpec, target:BuildTarget, profile:Profile):Void {
+		if (target != BuildTarget.CPP || profile != Profile.DEBUG) {
+			return;
+		}
+		if (!isHxcppDebugServerAvailable()) {
+			return;
+		}
+		if (hasLibrary(project.libraries, "hxcpp-debug-server")) {
+			return;
+		}
+		project.libraries.push(LibrarySpec.haxelib("hxcpp-debug-server"));
+	}
+
+	private static function hasLibrary(libraries:Array<LibrarySpec>, name:String):Bool {
+		for (library in (libraries != null ? libraries : [])) {
+			if (library != null && library.name == name) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static function isHxcppDebugServerAvailable():Bool {
+		if (cachedHxcppDebugServerAvailable != null) {
+			return cachedHxcppDebugServerAvailable;
+		}
+
+		var process = try {
+			new Process("haxelib", ["libpath", "hxcpp-debug-server"]);
+		} catch (_:Dynamic) {
+			cachedHxcppDebugServerAvailable = false;
+			return false;
+		}
+
+		try {
+			process.stdout.readAll();
+			process.stderr.readAll();
+			var exitCode = process.exitCode();
+			process.close();
+			cachedHxcppDebugServerAvailable = exitCode == 0;
+			return cachedHxcppDebugServerAvailable;
+		} catch (_:Dynamic) {
+			try process.close() catch (_:Dynamic) {}
+			cachedHxcppDebugServerAvailable = false;
+			return false;
+		}
 	}
 
 	private static function applyRule(resolved:ProjectSpec, rule:TargetRule, activeTokens:Map<String, Bool>):Void {

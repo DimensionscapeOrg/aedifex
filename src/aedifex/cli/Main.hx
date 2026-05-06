@@ -728,7 +728,9 @@ Most people should use:
 					printJson(result);
 				} else {
 					Sys.println("Synced Aedifex display support:");
-					Sys.println("  " + Path.join([result.projectRoot, result.hxmlPath]));
+					for (config in result.configs) {
+						Sys.println("  " + config.label + ": " + config.hxmlPath);
+					}
 				}
 			default:
 				throw "display commands: sync [projectPath] [-json]";
@@ -1507,7 +1509,7 @@ Most people should use:
 		var objDir = Path.join([outDir, "obj"]);
 		var haxeDir = Path.join([outDir, "haxe"]);
 		var fileBase = resolveDelegatedArtifactBaseName(project);
-		var launcher = buildDelegatedLauncher(delegatedTarget, binDir, fileBase);
+		var launcher = buildDelegatedLauncher(delegatedTarget, binDir, fileBase, Reflect.field(plan, "launcher"));
 		if (launcher == null) {
 			return null;
 		}
@@ -1557,13 +1559,14 @@ Most people should use:
 		};
 	}
 
-	private static function buildDelegatedLauncher(target:String, binDir:String, fileBase:String):Dynamic {
+	private static function buildDelegatedLauncher(target:String, binDir:String, fileBase:String, existingLauncher:Dynamic):Dynamic {
 		var normalized = target != null ? StringTools.trim(target).toLowerCase() : "";
+		var preferredDebugger = existingLauncher != null ? Reflect.field(existingLauncher, "debugger") : null;
 		return switch (normalized) {
 			case "windows":
 				{
 					kind: "native",
-					debugger: "cppvsdbg",
+					debugger: preferredDebugger != null ? preferredDebugger : "cppvsdbg",
 					command: Path.join([binDir, fileBase + ".exe"]),
 					args: [],
 					cwd: binDir
@@ -1571,7 +1574,7 @@ Most people should use:
 			case "linux", "mac":
 				{
 					kind: "native",
-					debugger: "cppdbg",
+					debugger: preferredDebugger != null ? preferredDebugger : "cppdbg",
 					command: Path.join([binDir, fileBase]),
 					args: [],
 					cwd: binDir

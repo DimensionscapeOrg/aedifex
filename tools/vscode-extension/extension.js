@@ -1,5 +1,6 @@
 const cp = require('child_process');
 const fs = require('fs');
+const net = require('net');
 const path = require('path');
 const vscode = require('vscode');
 
@@ -56,7 +57,6 @@ async function activate(context) {
     }
   }));
 
-  await registerDisplayProvider(context);
   await refreshStatusBar();
 }
 
@@ -274,6 +274,13 @@ class AedifexDebugConfigurationProvider {
       await launchWithoutDebugging(workspaceFolder, target, profile, launcher);
       return null;
     }
+    if (resolved.type === 'hxcpp') {
+      const portAvailable = await canListenOnTcpPort(6972, '127.0.0.1');
+      if (!portAvailable) {
+        vscode.window.showErrorMessage('Aedifex could not start HXCPP debugging because port 6972 is already in use. Close any running HXCPP app or debug session, then try again.');
+        return null;
+      }
+    }
     return resolved;
   }
 }
@@ -301,6 +308,15 @@ class AedifexTaskProvider {
 
 function toDebugConfiguration(folder, target, profile, launcher, allowWarnings = true) {
   if (launcher.kind === 'native') {
+    if (shouldUseHxcppDebugger(target, profile, launcher)) {
+      return {
+        name: 'Aedifex',
+        type: 'hxcpp',
+        request: 'launch',
+        program: toWorkspaceRelativeDebugPath(folder, launcher.command),
+        receiveAdapterOutput: true
+      };
+    }
     return {
       name: 'Aedifex',
       type: launcher.debugger || (process.platform === 'win32' ? 'cppvsdbg' : 'cppdbg'),
@@ -333,6 +349,55 @@ function toDebugConfiguration(folder, target, profile, launcher, allowWarnings =
     vscode.window.showWarningMessage(nonDebuggableTargetMessage(target, profile));
   }
   return null;
+}
+
+function shouldUseHxcppDebugger(target, profile, launcher) {
+  if (!launcher || launcher.kind !== 'native') {
+    return false;
+  }
+  if (String(profile || '').trim().toLowerCase() !== 'debug') {
+    return false;
+  }
+  const resolvedTarget = String(target && target.target ? target.target : '').trim().toLowerCase();
+  if (resolvedTarget !== 'cpp') {
+    return false;
+  }
+  const preferredDebugger = String(launcher.debugger || '').trim().toLowerCase();
+  if (preferredDebugger && preferredDebugger !== 'hxcpp') {
+    return false;
+  }
+  return vscode.extensions.getExtension('vshaxe.hxcpp-debugger') != null;
+}
+
+function toWorkspaceRelativeDebugPath(folder, filePath) {
+  const workspacePath = folder && folder.uri ? folder.uri.fsPath : null;
+  const absolutePath = String(filePath || '').trim();
+  if (!workspacePath || !absolutePath) {
+    return absolutePath;
+  }
+  const relativePath = path.relative(workspacePath, absolutePath);
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return absolutePath;
+  }
+  return `\${workspaceFolder}/${relativePath.replace(/\\\\/g, '/')}`;
+}
+
+function canListenOnTcpPort(port, host) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    let settled = false;
+    const finish = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(value);
+    };
+    server.once('error', () => finish(false));
+    server.listen(port, host, () => {
+      server.close(() => finish(true));
+    });
+  });
 }
 
 function nonDebuggableTargetMessage(target, profile) {
@@ -447,13 +512,12 @@ async function getTasks(folder) {
 }
 
 async function resolveLauncher(folder, target, profile, explain) {
-  const pluginLauncher = resolvePluginLauncher(folder, target, profile, explain);
-  if (pluginLauncher) {
-    return pluginLauncher;
+  const plan = await execJson(folder, buildLaunchPlanArgs(target, folder.uri.fsPath, profile));
+  if (plan && plan.launcher) {
+    return plan.launcher;
   }
 
-  const plan = await execJson(folder, buildLaunchPlanArgs(target, folder.uri.fsPath, profile));
-  return plan && plan.launcher ? plan.launcher : null;
+  return resolvePluginLauncher(folder, target, profile, explain);
 }
 
 async function getTargetCatalog(folder, explainOverride) {
@@ -1328,7 +1392,7 @@ function resolvePluginLauncher(folder, target, profile, explain) {
     case 'windows':
       return {
         kind: 'native',
-        debugger: 'cppvsdbg',
+        debugger: resolveNativePluginDebugger(target, profile, 'cppvsdbg'),
         command: path.join(binDir, `${fileBase}.exe`),
         cwd: binDir,
         args: []
@@ -1337,7 +1401,7 @@ function resolvePluginLauncher(folder, target, profile, explain) {
     case 'mac':
       return {
         kind: 'native',
-        debugger: 'cppdbg',
+        debugger: resolveNativePluginDebugger(target, profile, 'cppdbg'),
         command: path.join(binDir, fileBase),
         cwd: binDir,
         args: []
@@ -1358,6 +1422,15 @@ function resolvePluginLauncher(folder, target, profile, explain) {
     default:
       return null;
   }
+}
+
+function resolveNativePluginDebugger(target, profile, fallback) {
+  const resolvedTarget = String(target && target.target ? target.target : '').trim().toLowerCase();
+  const resolvedProfile = String(profile || '').trim().toLowerCase();
+  if (resolvedTarget === 'cpp' && resolvedProfile === 'debug' && vscode.extensions.getExtension('vshaxe.hxcpp-debugger') != null) {
+    return 'hxcpp';
+  }
+  return fallback;
 }
 
 function isLimeBackedPluginTarget(target) {
@@ -1544,10 +1617,7 @@ async function syncDisplayProvider(folder) {
   if (!folder) {
     return null;
   }
-  if (!displayProvider) {
-    return await execJson(folder, ['display', 'sync', folder.uri.fsPath]);
-  }
-  return await displayProvider.sync(folder);
+  return await execJson(folder, ['display', 'sync', folder.uri.fsPath]);
 }
 
 class AedifexDisplayArgsProvider {
@@ -1584,11 +1654,17 @@ class AedifexDisplayArgsProvider {
     }
 
     const payload = await execJson(folder, ['display', 'sync', folder.uri.fsPath]);
-    if (!payload || !Array.isArray(payload.args)) {
+    const selectedConfig = selectDisplayConfig(folder, payload);
+    if (!selectedConfig || !Array.isArray(selectedConfig.args)) {
       return payload;
     }
 
-    const serializedArgs = JSON.stringify(payload.args);
+    const parsedArguments = await this.resolveDisplayArguments(selectedConfig);
+    if (!Array.isArray(parsedArguments) || parsedArguments.length === 0) {
+      return payload;
+    }
+
+    const serializedArgs = JSON.stringify(parsedArguments);
     const changedWorkspace = this.workspaceRoot !== folder.uri.fsPath;
     if (!changedWorkspace && serializedArgs === this.serializedArgs) {
       return payload;
@@ -1596,28 +1672,42 @@ class AedifexDisplayArgsProvider {
 
     this.workspaceRoot = folder.uri.fsPath;
     this.serializedArgs = serializedArgs;
-    this.parsedArguments = payload.args.slice();
+    this.parsedArguments = parsedArguments;
     if (this.updateArgumentsCallback) {
       this.updateArgumentsCallback(this.parsedArguments);
     }
     return payload;
   }
+
+  async resolveDisplayArguments(config) {
+    const rawArgs = Array.isArray(config.args) ? config.args.slice() : [];
+    if (rawArgs.length === 1 && typeof rawArgs[0] === 'string' && /\.(?:hxml)$/i.test(rawArgs[0])) {
+      try {
+        const hxmlPath = rawArgs[0];
+        const hxmlContent = fs.readFileSync(hxmlPath, 'utf8');
+        const parsed = this.api.parseHxmlToArguments(hxmlContent);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (error) {
+        outputChannel.appendLine(`[display] failed to parse ${rawArgs[0]} for vshaxe: ${String(error)}`);
+      }
+    }
+    return rawArgs;
+  }
 }
 
 async function applyGeneratedHaxeConfiguration(folder, payload) {
-  if (!payload || !Array.isArray(payload.args)) {
+  const generatedEntries = normalizeDisplayConfigs(payload);
+  if (generatedEntries.length === 0) {
     return;
   }
 
   const configuration = vscode.workspace.getConfiguration('haxe', folder.uri);
   const current = configuration.get('configurations') || [];
-  const generated = {
-    label: payload.label || HAXE_CONFIG_LABEL,
-    args: payload.args,
-    files: Array.isArray(payload.files) ? payload.files : ['Aedifex.hx', 'ProjectDefines.hx']
-  };
-
-  const next = [generated].concat(current.filter((entry) => !(entry && typeof entry === 'object' && entry.label === generated.label)));
+  const generatedLabels = new Set(generatedEntries.map((entry) => entry.label).concat([HAXE_CONFIG_LABEL]));
+  const preserved = current.filter((entry) => !(entry && typeof entry === 'object' && generatedLabels.has(entry.label)));
+  const next = generatedEntries.concat(preserved);
   const legacyNext = next.map((entry) => entry && typeof entry === 'object' ? {
     label: entry.label,
     args: entry.args,
@@ -1649,6 +1739,109 @@ async function applyGeneratedHaxeConfiguration(folder, payload) {
       } catch (_) {}
     }
   }
+}
+
+function normalizeDisplayConfigs(payload) {
+  const entries = payload && Array.isArray(payload.configs) && payload.configs.length > 0
+    ? payload.configs
+    : (payload && Array.isArray(payload.args) ? [payload] : []);
+  return entries
+    .map((entry, index) => normalizeDisplayConfigEntry(entry, index))
+    .filter((entry) => entry != null);
+}
+
+function normalizeDisplayConfigEntry(entry, index = 0) {
+  if (!entry || !Array.isArray(entry.args) || entry.args.length === 0) {
+    return null;
+  }
+
+  const normalized = {
+    label: entry.label || (index === 0 ? HAXE_CONFIG_LABEL : `${HAXE_CONFIG_LABEL} ${index + 1}`),
+    args: entry.args.slice()
+  };
+  if (Array.isArray(entry.files) && entry.files.length > 0) {
+    normalized.files = entry.files.slice();
+  } else {
+    normalized.files = ['**/*.hx'];
+  }
+  if (entry.hxmlPath) {
+    normalized.hxmlPath = entry.hxmlPath;
+  }
+  return normalized;
+}
+
+function selectDisplayConfig(folder, payload) {
+  const configs = normalizeDisplayConfigs(payload);
+  if (configs.length === 0) {
+    return null;
+  }
+
+  const activeEditor = vscode.window.activeTextEditor;
+  const activeFile = activeEditor && activeEditor.document ? activeEditor.document.fileName : null;
+  if (!activeFile) {
+    return configs[0];
+  }
+
+  const relativePath = path.relative(folder.uri.fsPath, activeFile).replace(/\\/g, '/');
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return configs[0];
+  }
+
+  for (const config of configs) {
+    if (matchesDisplayFiles(relativePath, config.files)) {
+      return config;
+    }
+  }
+
+  return configs[0];
+}
+
+function matchesDisplayFiles(relativePath, patterns) {
+  const normalizedPath = String(relativePath || '').replace(/\\/g, '/');
+  if (!normalizedPath) {
+    return false;
+  }
+
+  for (const pattern of Array.isArray(patterns) ? patterns : []) {
+    const regex = globPatternToRegExp(pattern);
+    if (regex && regex.test(normalizedPath)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function globPatternToRegExp(pattern) {
+  const source = String(pattern || '').trim().replace(/\\/g, '/');
+  if (!source) {
+    return null;
+  }
+
+  let regex = '^';
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (char === '*') {
+      const next = source[i + 1];
+      if (next === '*') {
+        regex += '.*';
+        i++;
+      } else {
+        regex += '[^/]*';
+      }
+      continue;
+    }
+    if (char === '?') {
+      regex += '[^/]';
+      continue;
+    }
+    if (/[-/\\^$+?.()|[\]{}]/.test(char)) {
+      regex += '\\' + char;
+      continue;
+    }
+    regex += char;
+  }
+  regex += '$';
+  return new RegExp(regex);
 }
 
 function deactivate() {
