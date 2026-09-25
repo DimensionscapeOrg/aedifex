@@ -225,11 +225,10 @@ jobs:
           sudo make -C /tmp/hashlink install
           sudo ldconfig
 
-      - name: Install Neko on macOS
-        if: runner.os == 'macOS' && matrix.needsNeko
-        run: |
-          brew update
-          brew install neko
+      # No Neko from Homebrew on macOS: setup-haxe v2 installs one, which is
+      # on the PATH first. Installing Homebrew's as well put a second
+      # libneko where the loader looks first, and haxelib -- built against
+      # setup-haxe's -- loaded that one and crashed with a segfault.
 
       - name: Install HashLink on macOS
         if: runner.os == 'macOS' && matrix.needsHashLink
