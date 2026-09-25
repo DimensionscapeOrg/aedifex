@@ -41,6 +41,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # macOS on an Intel image: macos-13 was retired, and its jobs sat
+        # queued with no runner to take them. Intel keeps them as they were --
+        # HashLink's JIT is x86-64 only -- where Apple silicon would change
+        # what is tested rather than repair it.
         include:
           - os: windows-latest
             target: cpp
@@ -117,42 +121,42 @@ jobs:
             qualifier: "-html5"
             qualifierLabel: " - html5"
             runTarget: false
-          - os: macos-13
+          - os: macos-15-intel
             target: cpp
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
-          - os: macos-13
+          - os: macos-15-intel
             target: hl
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
             needsHashLink: true
-          - os: macos-13
+          - os: macos-15-intel
             target: neko
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
             needsNeko: true
-          - os: macos-13
+          - os: macos-15-intel
             target: jvm
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
             needsJava: true
-          - os: macos-13
+          - os: macos-15-intel
             target: php
             qualifier: ""
             qualifierLabel: ""
             runTarget: true
             needsPhp: true
-          - os: macos-13
+          - os: macos-15-intel
             target: js
             qualifier: "-node"
             qualifierLabel: " - node"
             runTarget: true
             needsNode: true
-          - os: macos-13
+          - os: macos-15-intel
             target: js
             qualifier: "-html5"
             qualifierLabel: " - html5"
@@ -200,7 +204,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libpng-dev libturbojpeg-dev libvorbis-dev libopenal-dev libsdl2-dev libglu1-mesa-dev libmbedtls-dev libuv1-dev libsqlite3-dev
-          git clone --depth 1 https://github.com/HaxeFoundation/hashlink.git /tmp/hashlink
+          # A release, not master: master moved to SDL3 with 1.16 and the build
+          # stopped at SDL3/SDL.h. 1.15 is the last release on SDL2, which the
+          # line above installs.
+          git clone --depth 1 --branch 1.15 https://github.com/HaxeFoundation/hashlink.git /tmp/hashlink
           make -C /tmp/hashlink
           sudo make -C /tmp/hashlink install
           sudo ldconfig
