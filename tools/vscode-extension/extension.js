@@ -262,8 +262,13 @@ class AedifexDebugConfigurationProvider {
     const profile = debugConfiguration.profile || await getSelectedProfile(workspaceFolder, null, true);
     const explain = await getExplain(workspaceFolder);
 
-    await executeTaskAndWait(createLifecycleTask(workspaceFolder, 'build', target, profile));
-    const launcher = await resolveLauncher(workspaceFolder, target, profile, explain);
+    // Only a build about to be debugged with hxcpp's debugger gets its debug
+    // server. The server listens on port 6972 whenever no debugger is
+    // there, so compiled into every debug build it let two debug apps run
+    // together hang each other, each taking the other for VS Code.
+    const debugEnv = hxcppDebuggerEnv(profile);
+    await executeTaskAndWait(createLifecycleTask(workspaceFolder, 'build', target, profile, false, debugEnv));
+    const launcher = await resolveLauncher(workspaceFolder, target, profile, explain, debugEnv);
     if (!launcher) {
       vscode.window.showErrorMessage('Aedifex did not return a launch plan.');
       return null;
@@ -304,6 +309,20 @@ class AedifexTaskProvider {
     const cleanBuild = command === 'build' ? definition.clean === true : false;
     return createLifecycleTask(folder, command, target, profile, cleanBuild);
   }
+}
+
+// The environment that asks Aedifex to compile hxcpp's debug server into a
+// cpp debug build, when the hxcpp debugger is installed to use it. An Aedifex
+// too old to know the variable ignores it and adds the server as it always
+// did; the launch plan says which debugger the build it made can take.
+function hxcppDebuggerEnv(profile) {
+  if (String(profile || '').trim().toLowerCase() !== 'debug') {
+    return undefined;
+  }
+  if (vscode.extensions.getExtension('vshaxe.hxcpp-debugger') == null) {
+    return undefined;
+  }
+  return { AEDIFEX_HXCPP_DEBUGGER: '1' };
 }
 
 function toDebugConfiguration(folder, target, profile, launcher, allowWarnings = true) {
@@ -511,8 +530,8 @@ async function getTasks(folder) {
   return execJson(folder, ['tasks', folder.uri.fsPath]);
 }
 
-async function resolveLauncher(folder, target, profile, explain) {
-  const plan = await execJson(folder, buildLaunchPlanArgs(target, folder.uri.fsPath, profile));
+async function resolveLauncher(folder, target, profile, explain, env) {
+  const plan = await execJson(folder, buildLaunchPlanArgs(target, folder.uri.fsPath, profile), env);
   if (plan && plan.launcher) {
     return plan.launcher;
   }
@@ -972,8 +991,8 @@ function hasAedifexProject(folder) {
   return fs.existsSync(path.join(folder.uri.fsPath, 'Aedifex.hx'));
 }
 
-async function execJson(folder, args) {
-  const result = await runCli(folder, args.concat('-json'), { expectJson: true, reveal: false });
+async function execJson(folder, args, env) {
+  const result = await runCli(folder, args.concat('-json'), { expectJson: true, reveal: false, env });
   return parseJsonResponse(result.stdout, result.stderr);
 }
 
@@ -1057,6 +1076,7 @@ function runCliCandidate(folder, candidates, options, index) {
     const candidate = candidates[index];
     const child = cp.spawn(candidate.command, candidate.args, {
       cwd: folder.uri.fsPath,
+      env: options.env ? Object.assign({}, process.env, options.env) : process.env,
       windowsHide: true,
       shell: process.platform === 'win32'
     });
@@ -1362,9 +1382,9 @@ function buildLifecycleArgs(command, target, projectPath, profile, cleanBuild = 
   return args;
 }
 
-function createLifecycleTask(folder, command, target, profile, cleanBuild = false) {
+function createLifecycleTask(folder, command, target, profile, cleanBuild = false, env) {
   const args = buildLifecycleArgs(command, target, folder.uri.fsPath, profile, cleanBuild);
-  return createCliTask(folder, args);
+  return createCliTask(folder, args, env);
 }
 
 function buildLaunchPlanArgs(target, projectPath, profile) {
@@ -1499,7 +1519,7 @@ function executeTaskAndWait(task) {
   });
 }
 
-function createCliTask(folder, args) {
+function createCliTask(folder, args, env) {
   const candidate = resolveCliCandidates(folder, buildCliArgs(args))[0];
   const definition = {
     type: 'aedifex',
@@ -1508,13 +1528,13 @@ function createCliTask(folder, args) {
     profile: extractProfileFromArgs(args),
     clean: hasArg(args, '-clean')
   };
+  const executionOptions = { cwd: folder.uri.fsPath };
+  if (env) {
+    executionOptions.env = env;
+  }
   const execution = (candidate.command && Array.isArray(candidate.args))
-    ? new vscode.ProcessExecution(candidate.command, candidate.args, {
-        cwd: folder.uri.fsPath
-      })
-    : new vscode.ShellExecution(candidate.display, {
-        cwd: folder.uri.fsPath
-      });
+    ? new vscode.ProcessExecution(candidate.command, candidate.args, executionOptions)
+    : new vscode.ShellExecution(candidate.display, executionOptions);
   const task = new vscode.Task(definition, folder, 'Aedifex', 'aedifex', execution);
   task.presentationOptions = {
     reveal: vscode.TaskRevealKind.Always,

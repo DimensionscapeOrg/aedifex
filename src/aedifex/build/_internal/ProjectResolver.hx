@@ -26,6 +26,9 @@ import sys.io.Process;
 class ProjectResolver {
 	private static var cachedHxcppDebugServerAvailable:Null<Bool> = null;
 
+	/** Set to `1` to have a cpp debug build include hxcpp's VS Code debug server. */
+	public static inline var HXCPP_DEBUGGER_ENV:String = "AEDIFEX_HXCPP_DEBUGGER";
+
 	public static function resolve(
 		project:ProjectSpec,
 		?target:BuildTarget,
@@ -58,13 +61,32 @@ class ProjectResolver {
 			applyRule(resolved, rule, activeTokens);
 		}
 
-		applyImplicitDebuggerSupport(resolved, target, profile);
+		applyRequestedDebuggerSupport(resolved, target, profile);
 		normalizeResolvedProject(resolved);
 		return resolved;
 	}
 
-	private static function applyImplicitDebuggerSupport(project:ProjectSpec, target:BuildTarget, profile:Profile):Void {
+	/**
+	 * Compiles hxcpp's VS Code debug server into a cpp debug build when the
+	 * build asks for it with `AEDIFEX_HXCPP_DEBUGGER=1`, which the VS Code
+	 * extension sets on the builds it is about to debug with hxcpp's debugger,
+	 * and the `hxcpp-debug-server` library is installed.
+	 *
+	 * Only then. The server connects to 127.0.0.1:6972, where VS Code's
+	 * adapter listens during an hxcpp debug session, and when nothing answers
+	 * it listens on 6972 itself, waiting for a debugger to attach. It was
+	 * compiled into every cpp debug build, so two debug apps run together
+	 * hung each other: the second connected to the first one's listener as if
+	 * it were VS Code, and both stopped as if a debugger had broken in. And
+	 * any one of them left running held 6972 against the next debug session.
+	 * A build no debugger will attach to has no use for it: the native
+	 * debuggers need nothing compiled in.
+	 */
+	private static function applyRequestedDebuggerSupport(project:ProjectSpec, target:BuildTarget, profile:Profile):Void {
 		if (target != BuildTarget.CPP || profile != Profile.DEBUG) {
+			return;
+		}
+		if (Sys.getEnv(HXCPP_DEBUGGER_ENV) != "1") {
 			return;
 		}
 		if (!isHxcppDebugServerAvailable()) {
