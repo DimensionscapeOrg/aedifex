@@ -144,12 +144,11 @@ jobs:
             qualifierLabel: ""
             runTarget: true
             needsJava: true
-          - os: macos-15-intel
-            target: php
-            qualifier: ""
-            qualifierLabel: ""
-            runTarget: true
-            needsPhp: true
+          # No PHP on macOS. setup-php installs it through Homebrew, which
+          # calls this Intel image a Tier 3 configuration; it spent 27
+          # minutes there and then reported "Could not setup PHP 8.3". The
+          # PHP target is the same generated PHP everywhere, and runs on
+          # Ubuntu and Windows.
           - os: macos-15-intel
             target: js
             qualifier: "-node"
