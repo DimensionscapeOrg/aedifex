@@ -56,6 +56,8 @@ Aedifex generates a small extraction runner and evaluates the project root throu
 
 and serializes the resulting `ProjectSpec`.
 
+By default, extraction uses `haxe` from `PATH`. Set `AEDIFEX_HAXE` to use a different executable for this bootstrap step. After extraction, project builds use `Project.haxeCompiler(...)` when configured.
+
 ## Target Resolution
 
 Public input is target-first:

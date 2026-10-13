@@ -13,6 +13,8 @@ class ProjectSpec {
 	public var haxelib:HaxelibSpec = new HaxelibSpec();
 	/** App/runtime-specific output information. */
 	public var app:AppSpec = new AppSpec();
+	/** Toolchain commands used by Aedifex when compiling this project. */
+	public var compiler:CompilerSpec = new CompilerSpec();
 	/** Default target used when a command does not provide one explicitly. */
 	public var defaultTarget:BuildTarget = null;
 	/** Default qualifier or platform when one is meaningful for the chosen target. */
@@ -89,6 +91,14 @@ class AppSpec {
 	public var mainClass:String = null;
 	public var path:String = "bin";
 	public var file:String = null;
+
+	public function new() {}
+}
+
+/** Compiler command configuration for project builds. */
+@:structInit
+class CompilerSpec {
+	public var haxe:String = null;
 
 	public function new() {}
 }

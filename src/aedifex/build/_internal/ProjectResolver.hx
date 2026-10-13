@@ -10,6 +10,7 @@ import aedifex.build.Profile;
 import aedifex.build.ProjectSpec;
 import aedifex.build.ProjectSpec.AppSpec;
 import aedifex.build.ProjectSpec.BuildCommand;
+import aedifex.build.ProjectSpec.CompilerSpec;
 import aedifex.build.ProjectSpec.ExtensionCapabilities;
 import aedifex.build.ProjectSpec.ExtensionSpec;
 import aedifex.build.ProjectSpec.HaxeFlag;
@@ -42,6 +43,7 @@ class ProjectResolver {
 		resolved.meta = cloneMeta(project.meta);
 		resolved.haxelib = cloneHaxelib(project.haxelib);
 		resolved.app = cloneApp(project.app);
+		resolved.compiler = cloneCompiler(project.compiler);
 		resolved.defaultTarget = project.defaultTarget;
 		resolved.defaultPlatform = project.defaultPlatform;
 		resolved.defaultArchitecture = project.defaultArchitecture;
@@ -384,6 +386,13 @@ class ProjectResolver {
 		app.path = value.path;
 		app.file = value.file;
 		return app;
+	}
+
+	private static function cloneCompiler(value:CompilerSpec):CompilerSpec {
+		var compiler = new CompilerSpec();
+		if (value == null) return compiler;
+		compiler.haxe = value.haxe;
+		return compiler;
 	}
 
 	private static function cloneHaxelib(value:HaxelibSpec):HaxelibSpec {

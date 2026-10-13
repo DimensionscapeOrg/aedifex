@@ -65,6 +65,7 @@ Examples:
 - `meta`
 - `haxelib`
 - `app`
+- `compiler`
 - `defaultTarget`
 - `defaultPlatform`
 - `defaultArchitecture`
@@ -154,6 +155,7 @@ Build setup:
 - `defaultPlatform`
 - `defaultArchitecture`
 - `defaultProfile`
+- `haxeCompiler`
 - `haxelib`
 - `library`
 - `dependency`
@@ -183,6 +185,21 @@ Tasks:
 Finish:
 
 - `done`
+
+## Compiler Command
+
+Projects can override the Haxe compiler executable used for target builds:
+
+```haxe
+Project
+	.named("Main")
+	.haxeCompiler("C:/HaxeToolkit/haxe-4.3.7/haxe.exe")
+	.done();
+```
+
+The value is an executable name or path. Additional compiler options should still use `haxeflag(...)`.
+
+`Aedifex.hx` extraction itself needs a Haxe executable before the project config has been read. Set `AEDIFEX_HAXE` to make the extractor/bootstrap step use the same alternate compiler.
 
 ## Metadata And `haxelib.json`
 

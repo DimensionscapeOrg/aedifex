@@ -1,5 +1,6 @@
 package aedifex.build._internal;
 
+import aedifex.build.ProjectSpec;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.Process;
@@ -44,6 +45,35 @@ class ToolEnvironment {
 		}
 
 		return resolveInstalledRoot();
+	}
+
+	public static function resolveHaxeCompiler(?project:ProjectSpec):String {
+		if (project != null && project.compiler != null && project.compiler.haxe != null) {
+			var configured = normalizeCommand(project.compiler.haxe);
+			if (configured != null) return configured;
+		}
+
+		var envValue = Sys.getEnv("AEDIFEX_HAXE");
+		if (envValue != null) {
+			var configured = normalizeCommand(envValue);
+			if (configured != null) return configured;
+		}
+
+		return "haxe";
+	}
+
+	private static function normalizeCommand(command:String):Null<String> {
+		if (command == null) return null;
+		var trimmed = StringTools.trim(command);
+		if (trimmed.length == 0) return null;
+		if (trimmed.length >= 2) {
+			var first = trimmed.charAt(0);
+			var last = trimmed.charAt(trimmed.length - 1);
+			if ((first == "\"" && last == "\"") || (first == "'" && last == "'")) {
+				trimmed = StringTools.trim(trimmed.substr(1, trimmed.length - 2));
+			}
+		}
+		return trimmed.length > 0 ? trimmed : null;
 	}
 
 	private static function resolveEnvironmentRoot():Null<String> {

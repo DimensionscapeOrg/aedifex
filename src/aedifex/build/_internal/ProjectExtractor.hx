@@ -35,7 +35,7 @@ class ProjectExtractor {
 		args.push("AedifexProjectExtractRunner");
 		args.push("--interp");
 
-		var result = capture("haxe", args);
+		var result = capture(ToolEnvironment.resolveHaxeCompiler(), args);
 		if (result.code != 0) {
 			throw "Failed to extract Aedifex project config from `" + provider.className + "`.\n" + StringTools.trim(result.stderr + "\n" + result.stdout);
 		}

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `Project.haxeCompiler(...)` sets the Haxe executable a project's target builds compile with, and `AEDIFEX_HAXE` sets it for reading `Aedifex.hx` and for projects that configure none. Both default to `haxe` on `PATH`.
 - cpp debug builds no longer include hxcpp's VS Code debug server unless asked for with `AEDIFEX_HXCPP_DEBUGGER=1`, which the VS Code extension sets on the builds it debugs with hxcpp's debugger. The server was compiled into every cpp debug build while `hxcpp-debug-server` was installed, and finding no debugger it listens on port 6972 for one to attach -- so two debug apps run together hung each other, the second taking the first one's listener for VS Code, and one left running held 6972 against the next debug session. Builds from the command line now leave it out and plan the native debugger; to debug one with hxcpp's debugger anyway, set the variable or add `-lib hxcpp-debug-server`.
 
 ## 1.0.0-rc.3

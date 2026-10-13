@@ -184,7 +184,7 @@ class ExecutionPlanner {
 			setup: setup != null ? setup.toDynamic() : null,
 			launcher: launcherFor(target, effectivePlatform, resolvedProject, paths, profile),
 			compiler: {
-				command: "haxe",
+				command: ToolEnvironment.resolveHaxeCompiler(resolvedProject),
 				backend: Std.string(resolveBackend(target))
 			}
 		};

@@ -238,6 +238,19 @@ class ProjectBuilder {
 	}
 
 	/**
+	 * Sets the Haxe compiler executable used for project builds.
+	 * @param command Executable name or absolute path to a Haxe compiler.
+	 * @return The same builder for chaining.
+	 */
+	public function haxeCompiler(command:String):ProjectBuilder {
+		var normalized = normalizeCommand(command);
+		if (normalized != null) {
+			spec.compiler.haxe = normalized;
+		}
+		return this;
+	}
+
+	/**
 	 * Sets the human-facing title.
 	 * @param value Human-facing title.
 	 * @return The same builder for chaining.
@@ -779,6 +792,20 @@ class ProjectBuilder {
 			if (existing == path) return;
 		}
 		paths.push(path);
+	}
+
+	private static function normalizeCommand(command:String):Null<String> {
+		if (command == null) return null;
+		var trimmed = StringTools.trim(command);
+		if (trimmed.length == 0) return null;
+		if (trimmed.length >= 2) {
+			var first = trimmed.charAt(0);
+			var last = trimmed.charAt(trimmed.length - 1);
+			if ((first == "\"" && last == "\"") || (first == "'" && last == "'")) {
+				trimmed = StringTools.trim(trimmed.substr(1, trimmed.length - 2));
+			}
+		}
+		return trimmed.length > 0 ? trimmed : null;
 	}
 
 	private static function isImplicitToolDependency(name:String):Bool {

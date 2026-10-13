@@ -10,6 +10,7 @@ import aedifex.build.ProjectSpec.BuildPhase;
 import aedifex.build.ResolvedBackend;
 import aedifex.build._internal.ExecutionPlanner;
 import aedifex.build._internal.ProjectResolver;
+import aedifex.build._internal.ToolEnvironment;
 import aedifex.config.Loader;
 import aedifex.util.SystemUtil;
 import haxe.io.Path;
@@ -70,8 +71,9 @@ class Builder {
 
 		runHooks(resolved.hooks, BuildPhase.PRE_BUILD, projectRoot);
 
+		var haxeCommand = ToolEnvironment.resolveHaxeCompiler(resolved);
 		var cmd = new Command();
-		cmd.add("haxe");
+		cmd.add(haxeCommand);
 		for (src in srcDirs) {
 			cmd.add("-cp");
 			cmd.add(src);
@@ -168,7 +170,7 @@ class Builder {
 
 		var code = cmd.run();
 		if (code != 0) {
-			throw "haxe failed with exit " + code;
+			throw haxeCommand + " failed with exit " + code;
 		}
 
 		switch (backend) {
