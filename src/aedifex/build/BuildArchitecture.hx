@@ -1,9 +1,11 @@
 package aedifex.build;
 
+import aedifex.util.SystemUtil;
+
 /**
  * Architecture catalog for target resolution.
  *
- * Aedifex defaults to the most common architecture for the selected target,
+ * Aedifex defaults to the architecture of the host,
  * but projects and command-line invocations can override it explicitly.
  */
 abstract BuildArchitecture(String) from String to String {
@@ -17,11 +19,11 @@ abstract BuildArchitecture(String) from String to String {
 	public static inline final ARMV7:BuildArchitecture = "armv7";
 
 	/**
-	 * Returns the default architecture used when none is specified explicitly.
+	 * Returns the default architecture used when none is specified explicitly: the host's.
 	 * @return The default architecture token.
 	 */
 	public static function hostDefault():BuildArchitecture {
-		return X64;
+		return normalize(SystemUtil.hostArchitecture());
 	}
 
 	/**

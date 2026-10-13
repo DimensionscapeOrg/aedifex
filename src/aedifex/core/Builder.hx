@@ -118,6 +118,13 @@ class Builder {
 		cmd.add("-D");
 		cmd.add("aedifex_arch=" + effectiveArchitecture);
 
+		if (backend == ResolvedBackend.CPP && effectivePlatform == BuildPlatform.hostNative()) {
+			for (d in hxcppArchitectureDefines(effectiveArchitecture, resolved, extraDefs)) {
+				cmd.add("-D");
+				cmd.add(d);
+			}
+		}
+
 		switch (profile) {
 			case Profile.DEBUG:
 				cmd.add("-D");
@@ -267,6 +274,24 @@ class Builder {
 			flattened.push(d.value == null ? d.name : d.name + "=" + d.value);
 		}
 		return flattened;
+	}
+
+	// hxcpp builds for the host's architecture unless told otherwise, so a desktop build passes the
+	// selected one on, unless the project already sets one of hxcpp's architecture defines.
+	private static function hxcppArchitectureDefines(architecture:BuildArchitecture, project:ProjectSpec, extraDefs:Array<String>):Array<String> {
+		var own = ["HXCPP_M32", "HXCPP_M64", "HXCPP_X86", "HXCPP_ARM64", "HXCPP_ARMV6", "HXCPP_ARMV7", "HXCPP_ARMV7S", "HXCPP_ARCH"];
+		for (d in project.defines) {
+			if (d != null && own.indexOf(d.name) >= 0) return [];
+		}
+		for (d in extraDefs) {
+			if (own.indexOf(d.split("=")[0]) >= 0) return [];
+		}
+		return switch (architecture) {
+			case BuildArchitecture.X86: ["HXCPP_M32"];
+			case BuildArchitecture.ARM64: ["HXCPP_ARM64", "HXCPP_M64"];
+			case BuildArchitecture.ARMV7: ["HXCPP_ARMV7"];
+			default: ["HXCPP_M64"];
+		};
 	}
 
 	private static function flattenLibraries(project:ProjectSpec):Array<String> {
